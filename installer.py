@@ -15,6 +15,8 @@ from cryptography.hazmat.backends import default_backend
 import pyautogui
 import pygetwindow as gw
 
+pyautogui.FAILSAFE = False
+
 # ── Config ────────────────────────────────────────────────────────────────────
 API_BASE = "https://rainy-backend1-production.up.railway.app"
 APP_NAME = "Rainy.solutions Installer"
@@ -70,47 +72,105 @@ def find_zen_studio():
 
 # ── Automate Zen Studio ───────────────────────────────────────────────────────
 def automate_zen_studio(zen_path, gpc_path):
-    """Open Zen Studio, compile and program, then close it."""
-    # Open Zen Studio with the gpc file
+    # Step 1: Open Zen Studio and load the gpc into compiler
     proc = subprocess.Popen([zen_path, gpc_path])
 
-    # Wait for Zen Studio window to appear
+    # Wait for Zen Studio window
     zen_window = None
     for _ in range(30):
         time.sleep(1)
-        windows = gw.getWindowsWithTitle("Zen Studio")
+        windows = gw.getWindowsWithTitle("ZENSTUDIO")
+        if not windows:
+            windows = gw.getWindowsWithTitle("Zen Studio")
         if windows:
             zen_window = windows[0]
             break
 
     if not zen_window:
         proc.kill()
-        raise Exception("Zen Studio did not open in time.")
+        raise Exception("Zen Studio did not open. Please install Zen Studio first.")
 
-    # Wait a bit more for it to fully load
-    time.sleep(3)
+    # Wait for full load
+    time.sleep(4)
 
-    # Bring window to front
+    # Bring to front
     try:
         zen_window.activate()
     except:
         pass
+    time.sleep(1)
+
+    # Get window position and size
+    wx = zen_window.left
+    wy = zen_window.top
+    ww = zen_window.width
+    wh = zen_window.height
+
+    # Step 2: Click Programmer tab
+    # Programmer tab is roughly at 50% across, 12% down from window top
+    programmer_x = wx + int(ww * 0.50)
+    programmer_y = wy + int(wh * 0.095)
+    pyautogui.click(programmer_x, programmer_y)
+    time.sleep(1.5)
+
+    # Step 3: Click the 3 lines button (left sidebar, roughly 4th button down)
+    # Based on screenshot: left sidebar buttons at ~4% across, spaced vertically
+    lines_btn_x = wx + int(ww * 0.038)
+    lines_btn_y = wy + int(wh * 0.355)
+    pyautogui.click(lines_btn_x, lines_btn_y)
+    time.sleep(1.5)
+
+    # Step 4: The gpc file should now appear in the list on the right
+    # Click it to select it — it appears at roughly 75% across, 25% down
+    file_list_x = wx + int(ww * 0.75)
+    file_list_y = wy + int(wh * 0.245)
+    pyautogui.click(file_list_x, file_list_y)
+    time.sleep(0.5)
+
+    # Step 5: Drag from file list to slot 2
+    # Slot 2 is roughly at 72% across, 70% down based on screenshot
+    slot2_x = wx + int(ww * 0.72)
+    slot2_y = wy + int(wh * 0.70)
+    pyautogui.moveTo(file_list_x, file_list_y, duration=0.3)
+    pyautogui.mouseDown()
+    time.sleep(0.3)
+    pyautogui.moveTo(slot2_x, slot2_y, duration=0.8)
+    pyautogui.mouseUp()
+    time.sleep(1.5)
+
+    # Step 6: Click the Play button
+    # Play button is on left sidebar, roughly 4% across, 52% down
+    play_btn_x = wx + int(ww * 0.038)
+    play_btn_y = wy + int(wh * 0.520)
+    pyautogui.click(play_btn_x, play_btn_y)
+    time.sleep(1)
+
+    # Step 7: Wait for success popup — check window title or just wait
+    success = False
+    for _ in range(20):
+        time.sleep(1)
+        # Check for any popup window with "success" or "OK"
+        for win in gw.getAllWindows():
+            title = win.title.lower()
+            if "success" in title or "complete" in title or "ok" in title or "programm" in title:
+                success = True
+                # Close the popup
+                try:
+                    win.close()
+                except:
+                    pass
+                break
+        if success:
+            break
 
     time.sleep(1)
 
-    # Press F5 to Compile & Program (standard Zen Studio shortcut)
-    pyautogui.hotkey('F5')
-    time.sleep(8)
-
-    # Close Zen Studio
+    # Step 8: Close Zen Studio
     try:
         zen_window.close()
     except:
         pass
-
     time.sleep(1)
-
-    # Force close if still open
     try:
         proc.terminate()
     except:
@@ -234,17 +294,13 @@ class RainyInstaller(tk.Tk):
             encrypted_bytes = response.content
             decrypted = decrypt_script(encrypted_bytes, key)
 
-            # Write temp file
             tmp_fd, tmp_path = tempfile.mkstemp(suffix=".gpc")
             with os.fdopen(tmp_fd, 'wb') as f:
                 f.write(decrypted)
 
-            self._set_status("Programming your Cronus Zen — please wait...", "#4a7a9b")
-
-            # Automate Zen Studio
+            self._set_status("Installing to your Cronus Zen — please wait...", "#4a7a9b")
             automate_zen_studio(zen_path, tmp_path)
 
-            # Delete temp file
             try:
                 os.remove(tmp_path)
                 tmp_path = None
