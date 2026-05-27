@@ -102,88 +102,81 @@ def decrypt_script(encrypted_bytes, license_key):
 
 # ── Find Zen Studio ───────────────────────────────────────────────────────────
 def find_zen_studio():
+    user_profile = os.environ.get('USERPROFILE', os.path.expanduser('~'))
+    desktop = os.path.join(user_profile, 'Desktop')
+    downloads = os.path.join(user_profile, 'Downloads')
+    appdata = os.environ.get('APPDATA', '')
+    localappdata = os.environ.get('LOCALAPPDATA', '')
+    sep = os.sep
+    pf = 'C:' + sep + 'Program Files'
+    pf86 = 'C:' + sep + 'Program Files (x86)'
     common_paths = [
-        r"C:\Program Files\Zen Studio\ZenStudio.exe",
-        r"C:\Program Files (x86)\Zen Studio\ZenStudio.exe",
-        r"C:\Program Files\Cronus\Zen Studio\ZenStudio.exe",
-        r"C:\Program Files (x86)\Cronus\Zen Studio\ZenStudio.exe",
+        pf + sep + 'Zen Studio' + sep + 'ZenStudio.exe',
+        pf86 + sep + 'Zen Studio' + sep + 'ZenStudio.exe',
+        pf + sep + 'Cronus' + sep + 'Zen Studio' + sep + 'ZenStudio.exe',
+        pf86 + sep + 'Cronus' + sep + 'Zen Studio' + sep + 'ZenStudio.exe',
+        pf + sep + 'CronusZen' + sep + 'ZenStudio.exe',
+        pf86 + sep + 'CronusZen' + sep + 'ZenStudio.exe',
+        'C:' + sep + 'ZenStudio' + sep + 'ZenStudio.exe',
+        'C:' + sep + 'Cronus' + sep + 'Zen Studio' + sep + 'ZenStudio.exe',
+        os.path.join(desktop, 'ZenStudio.exe'),
+        os.path.join(desktop, 'Zen Studio', 'ZenStudio.exe'),
+        os.path.join(desktop, 'Cronus Zen', 'ZenStudio.exe'),
+        os.path.join(downloads, 'ZenStudio.exe'),
+        os.path.join(downloads, 'Zen Studio', 'ZenStudio.exe'),
+        os.path.join(appdata, 'ZenStudio', 'ZenStudio.exe'),
+        os.path.join(localappdata, 'ZenStudio', 'ZenStudio.exe'),
+        os.path.join(localappdata, 'Cronus', 'Zen Studio', 'ZenStudio.exe'),
     ]
     for p in common_paths:
-        if os.path.exists(p):
+        if p and os.path.exists(p):
             return p
     try:
-        key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
-                             r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall")
-        for i in range(winreg.QueryInfoKey(key)[0]):
-            try:
-                subkey_name = winreg.EnumKey(key, i)
-                subkey = winreg.OpenKey(key, subkey_name)
-                name, _ = winreg.QueryValueEx(subkey, "DisplayName")
-                if "zen" in name.lower():
-                    install_loc, _ = winreg.QueryValueEx(subkey, "InstallLocation")
-                    candidate = os.path.join(install_loc, "ZenStudio.exe")
-                    if os.path.exists(candidate):
-                        return candidate
-            except:
-                continue
+        for hive in [winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER]:
+            for reg_path in [
+                'SOFTWARE' + sep + 'Microsoft' + sep + 'Windows' + sep + 'CurrentVersion' + sep + 'Uninstall',
+                'SOFTWARE' + sep + 'WOW6432Node' + sep + 'Microsoft' + sep + 'Windows' + sep + 'CurrentVersion' + sep + 'Uninstall',
+            ]:
+                try:
+                    key = winreg.OpenKey(hive, reg_path)
+                    for i in range(winreg.QueryInfoKey(key)[0]):
+                        try:
+                            subkey_name = winreg.EnumKey(key, i)
+                            subkey = winreg.OpenKey(key, subkey_name)
+                            try:
+                                name, _ = winreg.QueryValueEx(subkey, 'DisplayName')
+                                if 'zen' in name.lower() or 'cronus' in name.lower():
+                                    try:
+                                        install_loc, _ = winreg.QueryValueEx(subkey, 'InstallLocation')
+                                        candidate = os.path.join(install_loc, 'ZenStudio.exe')
+                                        if os.path.exists(candidate):
+                                            return candidate
+                                    except:
+                                        pass
+                                    try:
+                                        exe, _ = winreg.QueryValueEx(subkey, 'DisplayIcon')
+                                        exe = exe.split(',')[0].strip('"')
+                                        if os.path.exists(exe) and 'zen' in exe.lower():
+                                            return exe
+                                    except:
+                                        pass
+                            except:
+                                pass
+                        except:
+                            continue
+                except:
+                    pass
     except:
         pass
-    drives = ["C:", "D:", "E:"]
+    drives = ['C:', 'D:', 'E:', 'F:']
     for drive in drives:
-        results = glob.glob(f"{drive}\\**\\ZenStudio.exe", recursive=True)
-        if results:
-            return results[0]
-    return None
-
-# ── Emergency cleanup ─────────────────────────────────────────────────────────
-def emergency_cleanup(hwid):
-    global current_tmp_path
-    unlock_input()
-    if current_tmp_path and os.path.exists(current_tmp_path):
         try:
-            os.remove(current_tmp_path)
+            results = glob.glob(drive + sep + '**' + sep + 'ZenStudio.exe', recursive=True)
+            if results:
+                return results[0]
         except:
             pass
-    try:
-        requests.post(f"{API_BASE}/api/ban-hwid",
-                      json={"hwid": hwid, "reason": "Closed installer during installation"},
-                      timeout=5)
-    except:
-        pass
-    ctypes.windll.user32.MessageBoxW(
-        0,
-        "Program closed during installation.\n\nYour device has been banned.\nIf this was a mistake contact @8xgl for a new key.\n\nYour PC will restart in 2 seconds.",
-        "Installation Cancelled",
-        0x10
-    )
-    os.system("shutdown /r /t 2")
-
-# ── Send click to window handle without moving mouse ─────────────────────────
-def hwnd_click(hwnd, x, y):
-    """Send a click directly to a window handle at relative x,y coords."""
-    lParam = win32api.MAKELONG(x, y)
-    win32api.SendMessage(hwnd, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, lParam)
-    time.sleep(0.05)
-    win32api.SendMessage(hwnd, win32con.WM_LBUTTONUP, 0, lParam)
-    time.sleep(0.05)
-
-def hwnd_drag(hwnd, x1, y1, x2, y2):
-    """Send a drag from x1,y1 to x2,y2 directly to window handle."""
-    lParam1 = win32api.MAKELONG(x1, y1)
-    lParam2 = win32api.MAKELONG(x2, y2)
-    win32api.SendMessage(hwnd, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, lParam1)
-    time.sleep(0.2)
-    # Move gradually
-    steps = 20
-    for i in range(steps + 1):
-        ix = int(x1 + (x2 - x1) * i / steps)
-        iy = int(y1 + (y2 - y1) * i / steps)
-        lParamI = win32api.MAKELONG(ix, iy)
-        win32api.SendMessage(hwnd, win32con.WM_MOUSEMOVE, win32con.MK_LBUTTON, lParamI)
-        time.sleep(0.02)
-    win32api.SendMessage(hwnd, win32con.WM_LBUTTONUP, 0, lParam2)
-    time.sleep(0.1)
-
+    return None
 def find_zen_hwnd():
     """Find Zen Studio window handle."""
     result = []
