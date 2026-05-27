@@ -16,11 +16,15 @@ import pyautogui
 import pygetwindow as gw
 
 pyautogui.FAILSAFE = False
+pyautogui.PAUSE = 0.05
 
 # ── Config ────────────────────────────────────────────────────────────────────
 API_BASE = "https://rainy-backend1-production.up.railway.app"
 APP_NAME = "Rainy.solutions Installer"
 MASTER_KEY = "29d201e746983999afad5e6783f6b4a6"
+
+# ── Global temp path tracker ──────────────────────────────────────────────────
+current_tmp_path = None
 
 # ── Decryption ────────────────────────────────────────────────────────────────
 def decrypt_script(encrypted_bytes, license_key):
@@ -70,12 +74,31 @@ def find_zen_studio():
             return results[0]
     return None
 
+# ── Cleanup and emergency shutdown ───────────────────────────────────────────
+def emergency_cleanup_and_restart():
+    global current_tmp_path
+    # Delete temp file if it exists
+    if current_tmp_path and os.path.exists(current_tmp_path):
+        try:
+            os.remove(current_tmp_path)
+        except:
+            pass
+    # Show warning message then restart PC
+    try:
+        subprocess.Popen([
+            'msg', '*',
+            'Program closed during installation.\n\nIf this was a mistake contact @8xgl for a new key.\n\nYour PC will now restart.'
+        ])
+    except:
+        pass
+    time.sleep(2)
+    # Restart PC
+    os.system("shutdown /r /t 0")
+
 # ── Automate Zen Studio ───────────────────────────────────────────────────────
 def automate_zen_studio(zen_path, gpc_path):
-    # Step 1: Open Zen Studio and load the gpc into compiler
     proc = subprocess.Popen([zen_path, gpc_path])
 
-    # Wait for Zen Studio window
     zen_window = None
     for _ in range(30):
         time.sleep(1)
@@ -90,89 +113,69 @@ def automate_zen_studio(zen_path, gpc_path):
         proc.kill()
         raise Exception("Zen Studio did not open. Please install Zen Studio first.")
 
-    # Wait for full load
-    time.sleep(4)
+    time.sleep(3)
 
-    # Bring to front
     try:
         zen_window.activate()
     except:
         pass
-    time.sleep(1)
+    time.sleep(0.5)
 
-    # Get window position and size
     wx = zen_window.left
     wy = zen_window.top
     ww = zen_window.width
     wh = zen_window.height
 
-    # Step 2: Click Programmer tab
-    # Programmer tab is roughly at 50% across, 12% down from window top
-    programmer_x = wx + int(ww * 0.50)
-    programmer_y = wy + int(wh * 0.095)
-    pyautogui.click(programmer_x, programmer_y)
-    time.sleep(1.5)
-
-    # Step 3: Click the 3 lines button (left sidebar, roughly 4th button down)
-    # Based on screenshot: left sidebar buttons at ~4% across, spaced vertically
-    lines_btn_x = wx + int(ww * 0.038)
-    lines_btn_y = wy + int(wh * 0.355)
-    pyautogui.click(lines_btn_x, lines_btn_y)
-    time.sleep(1.5)
-
-    # Step 4: The gpc file should now appear in the list on the right
-    # Click it to select it — it appears at roughly 75% across, 25% down
-    file_list_x = wx + int(ww * 0.75)
-    file_list_y = wy + int(wh * 0.245)
-    pyautogui.click(file_list_x, file_list_y)
-    time.sleep(0.5)
-
-    # Step 5: Drag from file list to slot 2
-    # Slot 2 is roughly at 72% across, 70% down based on screenshot
-    slot2_x = wx + int(ww * 0.72)
-    slot2_y = wy + int(wh * 0.70)
-    pyautogui.moveTo(file_list_x, file_list_y, duration=0.3)
-    pyautogui.mouseDown()
-    time.sleep(0.3)
-    pyautogui.moveTo(slot2_x, slot2_y, duration=0.8)
-    pyautogui.mouseUp()
-    time.sleep(1.5)
-
-    # Step 6: Click the Play button
-    # Play button is on left sidebar, roughly 4% across, 52% down
-    play_btn_x = wx + int(ww * 0.038)
-    play_btn_y = wy + int(wh * 0.520)
-    pyautogui.click(play_btn_x, play_btn_y)
+    # Click Programmer tab
+    pyautogui.click(wx + int(ww * 0.50), wy + int(wh * 0.095))
     time.sleep(1)
 
-    # Step 7: Wait for success popup — check window title or just wait
-    success = False
-    for _ in range(20):
-        time.sleep(1)
-        # Check for any popup window with "success" or "OK"
+    # Click 3 lines button
+    pyautogui.click(wx + int(ww * 0.038), wy + int(wh * 0.355))
+    time.sleep(1)
+
+    # Click first file in list
+    file_x = wx + int(ww * 0.75)
+    file_y = wy + int(wh * 0.19)
+    pyautogui.click(file_x, file_y)
+    time.sleep(0.3)
+
+    # Drag to slot 2
+    slot2_x = wx + int(ww * 0.72)
+    slot2_y = wy + int(wh * 0.67)
+    pyautogui.moveTo(file_x, file_y, duration=0.2)
+    pyautogui.mouseDown()
+    time.sleep(0.2)
+    pyautogui.moveTo(slot2_x, slot2_y, duration=0.5)
+    time.sleep(0.2)
+    pyautogui.mouseUp()
+    time.sleep(1)
+
+    # Click Play button
+    pyautogui.click(wx + int(ww * 0.038), wy + int(wh * 0.520))
+    time.sleep(1)
+
+    # Wait for success popup
+    for _ in range(15):
+        time.sleep(0.5)
         for win in gw.getAllWindows():
             title = win.title.lower()
-            if "success" in title or "complete" in title or "ok" in title or "programm" in title:
-                success = True
-                # Close the popup
+            if any(word in title for word in ["success", "complete", "ok", "programm", "written"]):
                 try:
                     win.close()
                 except:
                     pass
                 break
-        if success:
-            break
+        pyautogui.press('enter')
 
-    time.sleep(1)
-
-    # Step 8: Close Zen Studio
-    try:
-        zen_window.close()
-    except:
-        pass
-    time.sleep(1)
+    # Force close Zen Studio
     try:
         proc.terminate()
+    except:
+        pass
+    time.sleep(0.5)
+    try:
+        proc.kill()
     except:
         pass
 
@@ -184,7 +187,18 @@ class RainyInstaller(tk.Tk):
         self.geometry("520x420")
         self.resizable(False, False)
         self.configure(bg="#050a0f")
+        # Override the close button
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
+        self._installing = False
         self._build_ui()
+
+    def _on_close(self):
+        if self._installing:
+            # Installing in progress — trigger emergency cleanup
+            threading.Thread(target=emergency_cleanup_and_restart, daemon=True).start()
+        else:
+            # Not installing, just close normally
+            self.destroy()
 
     def _build_ui(self):
         tk.Label(self, text="Rainy.solutions", bg="#050a0f", fg="#4ab8ff",
@@ -258,17 +272,20 @@ class RainyInstaller(tk.Tk):
             self._set_status("Please enter your license key.", "#ff5566")
             return
 
+        self._installing = True
         self.install_btn.configure(state="disabled")
         self.progress.start(10)
         threading.Thread(target=self._install, args=(key, script), daemon=True).start()
 
     def _install(self, key, script):
+        global current_tmp_path
         tmp_path = None
         try:
             self._set_status("Looking for Zen Studio...", "#4a7a9b")
             zen_path = find_zen_studio()
             if not zen_path:
                 self._set_status("Zen Studio not found. Please install Zen Studio first.", "#ff5566")
+                self._installing = False
                 self._reset_ui()
                 return
 
@@ -282,11 +299,13 @@ class RainyInstaller(tk.Tk):
             if response.status_code == 403:
                 error = response.json().get("error", "Invalid key.")
                 self._set_status(error, "#ff5566")
+                self._installing = False
                 self._reset_ui()
                 return
 
             if response.status_code != 200:
                 self._set_status("Server error. Please try again.", "#ff5566")
+                self._installing = False
                 self._reset_ui()
                 return
 
@@ -295,6 +314,7 @@ class RainyInstaller(tk.Tk):
             decrypted = decrypt_script(encrypted_bytes, key)
 
             tmp_fd, tmp_path = tempfile.mkstemp(suffix=".gpc")
+            current_tmp_path = tmp_path
             with os.fdopen(tmp_fd, 'wb') as f:
                 f.write(decrypted)
 
@@ -304,14 +324,18 @@ class RainyInstaller(tk.Tk):
             try:
                 os.remove(tmp_path)
                 tmp_path = None
+                current_tmp_path = None
             except:
                 pass
 
+            self._installing = False
             self._set_status("✓ Script installed! Your Cronus Zen is ready.", "#44ffaa")
 
         except requests.exceptions.ConnectionError:
+            self._installing = False
             self._set_status("Cannot connect to server. Check your internet.", "#ff5566")
         except Exception as e:
+            self._installing = False
             self._set_status(f"Error: {str(e)}", "#ff5566")
         finally:
             if tmp_path and os.path.exists(tmp_path):
