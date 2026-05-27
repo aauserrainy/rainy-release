@@ -244,14 +244,14 @@ def automate_zen_studio(zen_path, gpc_path):
     def locked_click(x, y):
     pyautogui.click(x, y)
 
-    def locked_drag(x1, y1, x2, y2):
+def locked_drag(x1, y1, x2, y2):
     pyautogui.moveTo(x1, y1, duration=0.2)
     pyautogui.mouseDown()
     time.sleep(0.2)
     pyautogui.moveTo(x2, y2, duration=0.5)
     time.sleep(0.2)
     pyautogui.mouseUp()
-
+    
     try:
         # Click Programmer tab
         locked_click(wx + int(ww * 0.50), wy + int(wh * 0.095))
