@@ -20,7 +20,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install pyinstaller requests cryptography pyautogui pygetwindow
+         pip install pyinstaller requests cryptography pyautogui pygetwindow pywin32
 
       - name: Create admin manifest
         run: |
