@@ -20,7 +20,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install pyinstaller requests cryptography
+          pip install pyinstaller requests cryptography pyautogui pygetwindow
 
       - name: Build EXE
         run: |
