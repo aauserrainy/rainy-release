@@ -1,0 +1,41 @@
+name: Build Windows EXE
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install pyinstaller requests cryptography
+
+      - name: Build EXE
+        run: |
+          pyinstaller --onefile --noconsole --name "RainyInstaller" installer.py
+
+      - name: Upload EXE as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: RainyInstaller
+          path: dist/RainyInstaller.exe
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: latest
+          name: Rainy Installer Latest
+          files: dist/RainyInstaller.exe
+          token: ${{ secrets.GITHUB_TOKEN }}
