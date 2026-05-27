@@ -561,7 +561,7 @@ class RainyInstaller(tk.Tk):
 
     def _start_install(self):
         key = self.key_var.get().strip().upper()
-        script = self.script_var.get()
+        script = "rainysoltuinsmadeby8xgl"
         if len(key) < 5:
             self._set_status("Please enter your license key.", ERROR)
             return
