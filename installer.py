@@ -297,22 +297,25 @@ class AnimatedBackground(tk.Canvas):
         self.after(33, self._animate)
 
 # ── Shimmer Progress Bar ──────────────────────────────────────────────────────
-class ShimmerBar(tk.Canvas):
+class ShimmerBar(tk.Frame):
     def __init__(self, parent, w, h, **kwargs):
-        super().__init__(parent, width=w, height=h, bg=BG,
-                         highlightthickness=0, **kwargs)
+        super().__init__(parent, width=w, height=h, bg="#0d0d1a",
+                         highlightthickness=1, highlightbackground=BORDER, **kwargs)
         self._w = w
         self._h = h
         self._running = False
         self._x = -150
-        # Track background - draw after widget is ready
-        self.after(100, self._draw_bg)
-        # Shimmer rect
-        self._shimmer = self.create_rectangle(0, 0, 0, 0, fill="white", outline="")
+        self._canvas = None
+        self._shimmer = None
+        self.pack_propagate(False)
+        self.after(200, self._setup_canvas)
 
-    def _draw_bg(self):
-        self.create_rectangle(0, 0, self._w, self._h,
-                              fill="#0d0d1a", outline=BORDER)
+    def _setup_canvas(self):
+        self._canvas = tk.Canvas(self, width=self._w, height=self._h,
+                                  bg="#0d0d1a", highlightthickness=0)
+        self._canvas.pack(fill="both", expand=True)
+        self._shimmer = self._canvas.create_rectangle(0, 0, 0, 0,
+                                                       fill="white", outline="")
 
     def start(self):
         self._running = True
@@ -321,18 +324,19 @@ class ShimmerBar(tk.Canvas):
 
     def stop(self):
         self._running = False
-        self.coords(self._shimmer, 0, 0, 0, 0)
+        if self._shimmer and self._canvas:
+            self._canvas.coords(self._shimmer, 0, 0, 0, 0)
 
     def _loop(self):
         if not self._running:
             return
-        self._x += 5
-        if self._x > self._w + 150:
-            self._x = -150
-        # Shimmer is a soft white band
-        self.coords(self._shimmer,
-                    self._x - 80, 2,
-                    self._x + 80, self._h - 2)
+        if self._canvas and self._shimmer:
+            self._x += 5
+            if self._x > self._w + 150:
+                self._x = -150
+            self._canvas.coords(self._shimmer,
+                                self._x - 80, 1,
+                                self._x + 80, self._h - 1)
         self.after(16, self._loop)
 
 # ── Step Widget ───────────────────────────────────────────────────────────────
@@ -426,13 +430,16 @@ class RainyInstaller(tk.Tk):
             self.after(18, self._fade_in)
 
     def _check_banned(self):
+        threading.Thread(target=self._check_banned_bg, daemon=True).start()
+
+    def _check_banned_bg(self):
         try:
             r = requests.post(f"{API_BASE}/api/check-hwid",
                               json={"hwid": self.hwid}, timeout=5)
             data = r.json()
             if data.get("banned"):
-                self.step1.set_error("Your device is banned. Contact @8xgl.")
-                self.install_btn.configure(state="disabled")
+                self.after(0, lambda: self.step1.set_error("Your device is banned. Contact @8xgl."))
+                self.after(0, lambda: self.install_btn.configure(state="disabled"))
         except:
             pass
 
@@ -577,8 +584,8 @@ class RainyInstaller(tk.Tk):
             self.script_combo.current(0)
 
     def _set_status(self, msg, color=None):
-        self.status_var.set(msg)
-        self.status_lbl.configure(fg=color or MUTED)
+        self.after(0, lambda: self.status_var.set(msg))
+        self.after(0, lambda: self.status_lbl.configure(fg=color or MUTED))
 
     def _start_install(self):
         key = self.key_var.get().strip().upper()
@@ -597,18 +604,18 @@ class RainyInstaller(tk.Tk):
         tmp_path = None
         try:
             # Step 1: Find Zen Studio
-            self.step1.set_active("Checking system compatibility...")
+            self.after(0, lambda: self.step1.set_active("Checking system compatibility..."))
             self._set_status("Looking for Zen Studio...", ACCENT2)
             zen_path = find_zen_studio()
             if not zen_path:
-                self.step1.set_error("Zen Studio not found. Please install it first.")
+                self.after(0, lambda: self.step1.set_error("Zen Studio not found. Please install it first."))
                 self._set_status("Zen Studio not found.", ERROR)
-                self._done(success=False)
+                self.after(0, lambda: self._done(success=False))
                 return
-            self.step1.set_done()
+            self.after(0, self.step1.set_done)
 
             # Step 2: Validate key
-            self.step2.set_active("Validating your license key...")
+            self.after(0, lambda: self.step2.set_active("Validating your license key..."))
             self._set_status("Validating key...", ACCENT2)
             response = requests.post(
                 f"{API_BASE}/api/redeem",
@@ -617,19 +624,19 @@ class RainyInstaller(tk.Tk):
             )
             if response.status_code == 403:
                 error = response.json().get("error", "Invalid key.")
-                self.step2.set_error(error)
+                self.after(0, lambda: self.step2.set_error(error))
                 self._set_status(error, ERROR)
-                self._done(success=False)
+                self.after(0, lambda: self._done(success=False))
                 return
             if response.status_code != 200:
-                self.step2.set_error("Server error. Please try again.")
+                self.after(0, lambda: self.step2.set_error("Server error. Please try again."))
                 self._set_status("Server error.", ERROR)
-                self._done(success=False)
+                self.after(0, lambda: self._done(success=False))
                 return
-            self.step2.set_done()
+            self.after(0, self.step2.set_done)
 
             # Step 3: Install
-            self.step3.set_active("Programming your Cronus Zen...")
+            self.after(0, lambda: self.step3.set_active("Programming your Cronus Zen..."))
             self._set_status("Installing to your Cronus Zen — do not close...", ACCENT2)
             encrypted_bytes = response.content
             decrypted = decrypt_script(encrypted_bytes, key)
@@ -638,10 +645,10 @@ class RainyInstaller(tk.Tk):
             with os.fdopen(tmp_fd, 'wb') as f:
                 f.write(decrypted)
             automate_zen_studio(zen_path, tmp_path)
-            self.step3.set_done()
+            self.after(0, self.step3.set_done)
 
             # Step 4: Cleanup
-            self.step4.set_active("Cleaning up...")
+            self.after(0, lambda: self.step4.set_active("Cleaning up..."))
             self._set_status("Finalizing...", ACCENT2)
             try:
                 os.remove(tmp_path)
@@ -650,17 +657,17 @@ class RainyInstaller(tk.Tk):
             except:
                 pass
             time.sleep(0.5)
-            self.step4.set_done()
+            self.after(0, self.step4.set_done)
 
             self._set_status("✓ Script installed! Your Cronus Zen is ready.", SUCCESS)
-            self._done(success=True)
+            self.after(0, lambda: self._done(success=True))
 
         except requests.exceptions.ConnectionError:
             self._set_status("Cannot connect to server. Check your internet.", ERROR)
-            self._done(success=False)
+            self.after(0, lambda: self._done(success=False))
         except Exception as e:
             self._set_status(f"Error: {str(e)}", ERROR)
-            self._done(success=False)
+            self.after(0, lambda: self._done(success=False))
         finally:
             if tmp_path and os.path.exists(tmp_path):
                 try:
