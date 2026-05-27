@@ -242,8 +242,8 @@ def automate_zen_studio(zen_path, gpc_path):
     wh = zen_window.height
 
     def locked_click(x, y):
-    pyautogui.click(x, y)
-
+        pyautogui.click(x, y)
+    
 def locked_drag(x1, y1, x2, y2):
     pyautogui.moveTo(x1, y1, duration=0.2)
     pyautogui.mouseDown()
