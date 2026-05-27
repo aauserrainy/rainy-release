@@ -548,7 +548,7 @@ class RainyInstaller(tk.Tk):
         try:
             r = requests.get(f"{API_BASE}/api/scripts", timeout=5)
             scripts = r.json().get("scripts", [])
-            self.script_combo["values"] = ["Rain" for _ in scripts]
+            self.script_combo["values"] = scripts
             if scripts:
                 self.script_combo.current(0)
         except:
@@ -561,7 +561,7 @@ class RainyInstaller(tk.Tk):
 
     def _start_install(self):
         key = self.key_var.get().strip().upper()
-        script = "rainysoltuinsmadeby8xgl"
+        script = self.script_var.get()
         if len(key) < 5:
             self._set_status("Please enter your license key.", ERROR)
             return
