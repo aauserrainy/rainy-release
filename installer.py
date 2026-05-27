@@ -456,7 +456,7 @@ class RainyInstaller(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title(APP_NAME)
-        self.geometry("680x580")
+        self.geometry("720x720")
         self.resizable(False, False)
         self.configure(bg=BG)
         self.attributes('-alpha', 0.0)
