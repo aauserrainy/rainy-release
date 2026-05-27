@@ -10,6 +10,8 @@ import threading
 import winreg
 import glob
 import time
+import uuid
+import ctypes
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 import pyautogui
@@ -23,8 +25,34 @@ API_BASE = "https://rainy-backend1-production.up.railway.app"
 APP_NAME = "Rainy.solutions Installer"
 MASTER_KEY = "29d201e746983999afad5e6783f6b4a6"
 
-# ── Global temp path tracker ──────────────────────────────────────────────────
+# ── Global state ──────────────────────────────────────────────────────────────
 current_tmp_path = None
+is_installing = False
+
+# ── Get Hardware ID ───────────────────────────────────────────────────────────
+def get_hwid():
+    try:
+        # Use Windows machine GUID as HWID
+        key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
+                             r"SOFTWARE\Microsoft\Cryptography")
+        machine_guid, _ = winreg.QueryValueEx(key, "MachineGuid")
+        return hashlib.sha256(machine_guid.encode()).hexdigest()
+    except:
+        # Fallback to MAC address
+        return hashlib.sha256(str(uuid.getnode()).encode()).hexdigest()
+
+# ── Lock/Unlock mouse and keyboard ────────────────────────────────────────────
+def lock_input():
+    try:
+        ctypes.windll.user32.BlockInput(True)
+    except:
+        pass
+
+def unlock_input():
+    try:
+        ctypes.windll.user32.BlockInput(False)
+    except:
+        pass
 
 # ── Decryption ────────────────────────────────────────────────────────────────
 def decrypt_script(encrypted_bytes, license_key):
@@ -74,24 +102,33 @@ def find_zen_studio():
             return results[0]
     return None
 
-# ── Cleanup and emergency shutdown ───────────────────────────────────────────
-def emergency_cleanup_and_restart():
+# ── Emergency cleanup ─────────────────────────────────────────────────────────
+def emergency_cleanup(hwid):
     global current_tmp_path
-    # Delete temp file if it exists
+    # Delete temp file
     if current_tmp_path and os.path.exists(current_tmp_path):
         try:
             os.remove(current_tmp_path)
         except:
             pass
-    # Show warning message then restart PC
+    # Unlock input first so user can see the message
+    unlock_input()
+    # Ban the HWID
+    try:
+        requests.post(f"{API_BASE}/api/ban-hwid",
+                      json={"hwid": hwid, "reason": "Closed installer during installation"},
+                      timeout=5)
+    except:
+        pass
+    # Show warning
     try:
         subprocess.Popen([
             'msg', '*',
-            'Program closed during installation.\n\nIf this was a mistake contact @8xgl for a new key.\n\nYour PC will now restart.'
+            'Program closed during installation.\n\nYour device has been banned.\nIf this was a mistake contact @8xgl for a new key.\n\nYour PC will now restart.'
         ])
     except:
         pass
-    time.sleep(2)
+    time.sleep(3)
     # Restart PC
     os.system("shutdown /r /t 0")
 
@@ -126,47 +163,55 @@ def automate_zen_studio(zen_path, gpc_path):
     ww = zen_window.width
     wh = zen_window.height
 
-    # Click Programmer tab
-    pyautogui.click(wx + int(ww * 0.50), wy + int(wh * 0.095))
-    time.sleep(1)
+    # Lock input while automating
+    lock_input()
 
-    # Click 3 lines button
-    pyautogui.click(wx + int(ww * 0.038), wy + int(wh * 0.355))
-    time.sleep(1)
+    try:
+        # Click Programmer tab
+        pyautogui.click(wx + int(ww * 0.50), wy + int(wh * 0.095))
+        time.sleep(1)
 
-    # Click first file in list
-    file_x = wx + int(ww * 0.75)
-    file_y = wy + int(wh * 0.19)
-    pyautogui.click(file_x, file_y)
-    time.sleep(0.3)
+        # Click 3 lines button
+        pyautogui.click(wx + int(ww * 0.038), wy + int(wh * 0.355))
+        time.sleep(1)
 
-    # Drag to slot 2
-    slot2_x = wx + int(ww * 0.72)
-    slot2_y = wy + int(wh * 0.67)
-    pyautogui.moveTo(file_x, file_y, duration=0.2)
-    pyautogui.mouseDown()
-    time.sleep(0.2)
-    pyautogui.moveTo(slot2_x, slot2_y, duration=0.5)
-    time.sleep(0.2)
-    pyautogui.mouseUp()
-    time.sleep(1)
+        # Click first file in list
+        file_x = wx + int(ww * 0.75)
+        file_y = wy + int(wh * 0.19)
+        pyautogui.click(file_x, file_y)
+        time.sleep(0.3)
 
-    # Click Play button
-    pyautogui.click(wx + int(ww * 0.038), wy + int(wh * 0.520))
-    time.sleep(1)
+        # Drag to slot 2
+        slot2_x = wx + int(ww * 0.72)
+        slot2_y = wy + int(wh * 0.67)
+        pyautogui.moveTo(file_x, file_y, duration=0.2)
+        pyautogui.mouseDown()
+        time.sleep(0.2)
+        pyautogui.moveTo(slot2_x, slot2_y, duration=0.5)
+        time.sleep(0.2)
+        pyautogui.mouseUp()
+        time.sleep(1)
 
-    # Wait for success popup
-    for _ in range(15):
-        time.sleep(0.5)
-        for win in gw.getAllWindows():
-            title = win.title.lower()
-            if any(word in title for word in ["success", "complete", "ok", "programm", "written"]):
-                try:
-                    win.close()
-                except:
-                    pass
-                break
-        pyautogui.press('enter')
+        # Click Play button
+        pyautogui.click(wx + int(ww * 0.038), wy + int(wh * 0.520))
+        time.sleep(1)
+
+        # Wait for success popup
+        for _ in range(15):
+            time.sleep(0.5)
+            for win in gw.getAllWindows():
+                title = win.title.lower()
+                if any(word in title for word in ["success", "complete", "ok", "programm", "written"]):
+                    try:
+                        win.close()
+                    except:
+                        pass
+                    break
+            pyautogui.press('enter')
+
+    finally:
+        # Always unlock input
+        unlock_input()
 
     # Force close Zen Studio
     try:
@@ -187,17 +232,32 @@ class RainyInstaller(tk.Tk):
         self.geometry("520x420")
         self.resizable(False, False)
         self.configure(bg="#050a0f")
-        # Override the close button
-        self.protocol("WM_DELETE_WINDOW", self._on_close)
+        self.hwid = get_hwid()
         self._installing = False
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
         self._build_ui()
+        # Check if banned on startup
+        self._check_banned()
+
+    def _check_banned(self):
+        try:
+            r = requests.post(f"{API_BASE}/api/check-hwid",
+                              json={"hwid": self.hwid}, timeout=5)
+            data = r.json()
+            if data.get("banned"):
+                self._set_status("Your device is banned. Contact @8xgl.", "#ff5566")
+                self.install_btn.configure(state="disabled")
+        except:
+            pass
 
     def _on_close(self):
         if self._installing:
-            # Installing in progress — trigger emergency cleanup
-            threading.Thread(target=emergency_cleanup_and_restart, daemon=True).start()
+            threading.Thread(
+                target=emergency_cleanup,
+                args=(self.hwid,),
+                daemon=True
+            ).start()
         else:
-            # Not installing, just close normally
             self.destroy()
 
     def _build_ui(self):
@@ -292,7 +352,7 @@ class RainyInstaller(tk.Tk):
             self._set_status("Validating key...", "#4a7a9b")
             response = requests.post(
                 f"{API_BASE}/api/redeem",
-                json={"key": key, "script": script},
+                json={"key": key, "script": script, "hwid": self.hwid},
                 timeout=15
             )
 
@@ -318,7 +378,7 @@ class RainyInstaller(tk.Tk):
             with os.fdopen(tmp_fd, 'wb') as f:
                 f.write(decrypted)
 
-            self._set_status("Installing to your Cronus Zen — please wait...", "#4a7a9b")
+            self._set_status("Installing to your Cronus Zen — do not close...", "#4a7a9b")
             automate_zen_studio(zen_path, tmp_path)
 
             try:
