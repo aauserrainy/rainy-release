@@ -464,8 +464,8 @@ class RainyInstaller(tk.Tk):
 
         tk.Label(header, text="RAINY.SOLUTIONS", bg=BG, fg=ACCENT2,
                  font=("Segoe UI", 16, "bold")).pack(pady=(6, 0))
-        tk.Label(header, text="INSTALLER", bg=BG, fg=MUTED,
-                 font=("Segoe UI", 8, "bold"), letterSpacing=8).pack()
+        tk.Label(header, text="I N S T A L L E R", bg=BG, fg=MUTED,
+                 font=("Segoe UI", 8, "bold")).pack()
         tk.Label(header, text="Enhance your experience. Install. Inject. Dominate.",
                  bg=BG, fg=MUTED, font=("Segoe UI", 8)).pack(pady=(2, 0))
 
