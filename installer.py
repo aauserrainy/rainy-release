@@ -616,7 +616,9 @@ class RainyInstaller(tk.Tk):
             current_tmp_path = tmp_path
             with os.fdopen(tmp_fd, 'wb') as f:
                 f.write(decrypted)
+            unlock_input()
             automate_zen_studio(zen_path, tmp_path)
+            lock_input()
             self.after(0, self.step3.set_done)
 
             # Step 4: Cleanup
