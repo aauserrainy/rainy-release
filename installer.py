@@ -41,8 +41,18 @@ if not is_admin():
 API_BASE = "https://rainy-backend1-production.up.railway.app"
 APP_NAME = "Rainy.solutions Installer"
 MASTER_KEY = "29d201e746983999afad5e6783f6b4a6"
-
 current_tmp_path = None
+
+# ── Colors ────────────────────────────────────────────────────────────────────
+BG       = "#0a0a12"
+SURFACE  = "#12121e"
+BORDER   = "#2a1f4a"
+ACCENT   = "#7c3aed"
+ACCENT2  = "#a855f7"
+TEXT     = "#e2e8f0"
+MUTED    = "#4a4a6a"
+SUCCESS  = "#44ffaa"
+ERROR    = "#ff5566"
 
 # ── HWID ──────────────────────────────────────────────────────────────────────
 def get_hwid():
@@ -54,15 +64,21 @@ def get_hwid():
         return hashlib.sha256(str(uuid.getnode()).encode()).hexdigest()
 
 # ── Input lock ────────────────────────────────────────────────────────────────
+_input_locked = False
+
 def lock_input():
+    global _input_locked
     try:
         ctypes.windll.user32.BlockInput(True)
+        _input_locked = True
     except:
         pass
 
 def unlock_input():
+    global _input_locked
     try:
         ctypes.windll.user32.BlockInput(False)
+        _input_locked = False
     except:
         pass
 
@@ -117,12 +133,12 @@ def find_zen_studio():
 # ── Emergency cleanup ─────────────────────────────────────────────────────────
 def emergency_cleanup(hwid):
     global current_tmp_path
+    unlock_input()
     if current_tmp_path and os.path.exists(current_tmp_path):
         try:
             os.remove(current_tmp_path)
         except:
             pass
-    unlock_input()
     try:
         requests.post(f"{API_BASE}/api/ban-hwid",
                       json={"hwid": hwid, "reason": "Closed installer during installation"},
@@ -141,62 +157,88 @@ def emergency_cleanup(hwid):
 # ── Automate Zen Studio ───────────────────────────────────────────────────────
 def automate_zen_studio(zen_path, gpc_path):
     proc = subprocess.Popen([zen_path, gpc_path])
+
+    # Wait for ANY window containing "zen" in title
     zen_window = None
     for _ in range(30):
         time.sleep(1)
-        windows = gw.getWindowsWithTitle("ZENSTUDIO")
-        if not windows:
-            windows = gw.getWindowsWithTitle("Zen Studio")
-        if windows:
-            zen_window = windows[0]
+        for win in gw.getAllWindows():
+            if "zen" in win.title.lower() and win.width > 200:
+                zen_window = win
+                break
+        if zen_window:
             break
+
     if not zen_window:
         proc.kill()
         raise Exception("Zen Studio did not open. Please install Zen Studio first.")
-    time.sleep(3)
+
+    # Wait for full load
+    time.sleep(4)
+
+    # Bring to front and maximize to get consistent coords
     try:
         zen_window.activate()
+        time.sleep(0.5)
+        zen_window.maximize()
+        time.sleep(1)
     except:
         pass
-    time.sleep(0.5)
+
+    # Re-get window after maximize
+    for win in gw.getAllWindows():
+        if "zen" in win.title.lower() and win.width > 200:
+            zen_window = win
+            break
+
     wx = zen_window.left
     wy = zen_window.top
     ww = zen_window.width
     wh = zen_window.height
-    lock_input()
-    try:
-        pyautogui.click(wx + int(ww * 0.50), wy + int(wh * 0.095))
-        time.sleep(1)
-        pyautogui.click(wx + int(ww * 0.038), wy + int(wh * 0.355))
-        time.sleep(1)
-        file_x = wx + int(ww * 0.75)
-        file_y = wy + int(wh * 0.19)
-        pyautogui.click(file_x, file_y)
-        time.sleep(0.3)
-        slot2_x = wx + int(ww * 0.72)
-        slot2_y = wy + int(wh * 0.67)
-        pyautogui.moveTo(file_x, file_y, duration=0.2)
-        pyautogui.mouseDown()
-        time.sleep(0.2)
-        pyautogui.moveTo(slot2_x, slot2_y, duration=0.5)
-        time.sleep(0.2)
-        pyautogui.mouseUp()
-        time.sleep(1)
-        pyautogui.click(wx + int(ww * 0.038), wy + int(wh * 0.520))
-        time.sleep(1)
-        for _ in range(15):
-            time.sleep(0.5)
-            for win in gw.getAllWindows():
-                title = win.title.lower()
-                if any(word in title for word in ["success", "complete", "ok", "programm", "written"]):
-                    try:
-                        win.close()
-                    except:
-                        pass
-                    break
-            pyautogui.press('enter')
-    finally:
-        unlock_input()
+
+    # Click Programmer tab
+    pyautogui.click(wx + int(ww * 0.50), wy + int(wh * 0.095))
+    time.sleep(1.5)
+
+    # Click 3 lines button
+    pyautogui.click(wx + int(ww * 0.038), wy + int(wh * 0.355))
+    time.sleep(1.5)
+
+    # Click first file in list
+    file_x = wx + int(ww * 0.75)
+    file_y = wy + int(wh * 0.19)
+    pyautogui.click(file_x, file_y)
+    time.sleep(0.5)
+
+    # Drag to slot 2
+    slot2_x = wx + int(ww * 0.72)
+    slot2_y = wy + int(wh * 0.67)
+    pyautogui.moveTo(file_x, file_y, duration=0.3)
+    pyautogui.mouseDown()
+    time.sleep(0.3)
+    pyautogui.moveTo(slot2_x, slot2_y, duration=0.6)
+    time.sleep(0.3)
+    pyautogui.mouseUp()
+    time.sleep(1.5)
+
+    # Click Play button
+    pyautogui.click(wx + int(ww * 0.038), wy + int(wh * 0.520))
+    time.sleep(1)
+
+    # Wait for success popup
+    for _ in range(20):
+        time.sleep(0.5)
+        for win in gw.getAllWindows():
+            title = win.title.lower()
+            if any(word in title for word in ["success", "complete", "programm", "written", "ok"]):
+                try:
+                    win.close()
+                except:
+                    pass
+                break
+        pyautogui.press('enter')
+
+    # Force close Zen Studio
     try:
         proc.terminate()
     except:
@@ -207,108 +249,177 @@ def automate_zen_studio(zen_path, gpc_path):
     except:
         pass
 
-# ── Animated Background Canvas ────────────────────────────────────────────────
+# ── Animated Background ───────────────────────────────────────────────────────
 class AnimatedBackground(tk.Canvas):
-    def __init__(self, parent, **kwargs):
-        super().__init__(parent, **kwargs)
+    def __init__(self, parent, w, h, **kwargs):
+        super().__init__(parent, width=w, height=h, bg=BG,
+                         highlightthickness=0, **kwargs)
+        self.w = w
+        self.h = h
         self.lines = []
         self._init_lines()
         self._animate()
 
     def _init_lines(self):
-        w, h = 520, 440
         import random
-        random.seed(42)
-        for _ in range(18):
-            x1 = random.randint(-100, w + 100)
-            y1 = random.randint(-100, h + 100)
-            angle = random.uniform(-30, 30)
-            length = random.randint(80, 220)
-            speed = random.uniform(0.3, 1.2)
-            opacity = random.uniform(0.08, 0.22)
+        random.seed(99)
+        for _ in range(20):
+            x1 = random.randint(-100, self.w + 100)
+            y1 = random.randint(-100, self.h + 100)
+            angle = random.uniform(-45, 45)
+            length = random.randint(60, 180)
+            speed = random.uniform(0.2, 0.8)
+            alpha = random.uniform(0.05, 0.18)
             dx = math.cos(math.radians(angle)) * speed
             dy = math.sin(math.radians(angle)) * speed
-            r = int(74 * opacity)
-            g = int(184 * opacity)
-            b = int(255 * opacity)
+            r = int(124 * alpha * 3)
+            g = int(58 * alpha * 3)
+            b = int(237 * alpha * 3)
+            r = min(r, 255); g = min(g, 255); b = min(b, 255)
             color = f"#{r:02x}{g:02x}{b:02x}"
-            line_id = self.create_line(x1, y1, x1 + length, y1 + length,
-                                       fill=color, width=1)
-            self.lines.append({
-                'id': line_id, 'x': x1, 'y': y1,
-                'dx': dx, 'dy': dy, 'length': length,
-                'angle': angle, 'color': color
-            })
+            lid = self.create_line(x1, y1, x1+length, y1+length,
+                                   fill=color, width=1)
+            self.lines.append({'id': lid, 'x': x1, 'y': y1,
+                                'dx': dx, 'dy': dy, 'length': length,
+                                'angle': angle})
 
     def _animate(self):
-        w, h = 520, 440
         for l in self.lines:
             l['x'] += l['dx']
             l['y'] += l['dy']
-            # Wrap around
-            if l['x'] > w + 120: l['x'] = -120
-            if l['x'] < -120: l['x'] = w + 120
-            if l['y'] > h + 120: l['y'] = -120
-            if l['y'] < -120: l['y'] = h + 120
+            if l['x'] > self.w + 120: l['x'] = -120
+            if l['x'] < -120: l['x'] = self.w + 120
+            if l['y'] > self.h + 120: l['y'] = -120
+            if l['y'] < -120: l['y'] = self.h + 120
             ex = l['x'] + math.cos(math.radians(l['angle'])) * l['length']
             ey = l['y'] + math.sin(math.radians(l['angle'])) * l['length']
             self.coords(l['id'], l['x'], l['y'], ex, ey)
-        self.after(30, self._animate)
+        self.after(33, self._animate)
 
-# ── Custom Progress Bar ───────────────────────────────────────────────────────
+# ── Shimmer Progress Bar ──────────────────────────────────────────────────────
 class ShimmerBar(tk.Canvas):
-    def __init__(self, parent, **kwargs):
-        super().__init__(parent, bg="#000000", highlightthickness=1,
-                         highlightbackground="#1a2d42", **kwargs)
-        self._shimmer_x = -200
+    def __init__(self, parent, w, h, **kwargs):
+        super().__init__(parent, width=w, height=h, bg=BG,
+                         highlightthickness=0, **kwargs)
+        self._w = w
+        self._h = h
         self._running = False
-        self._bar = self.create_rectangle(0, 0, 0, 0, fill="#000000", outline="")
-        self._shimmer = self.create_rectangle(0, 0, 0, 0, fill="#ffffff", outline="")
+        self._x = -150
+        # Track background
+        self.create_rectangle(0, 0, w, h, fill="#0d0d1a", outline=BORDER)
+        # Shimmer rect
+        self._shimmer = self.create_rectangle(0, 0, 0, 0, fill="white", outline="")
 
     def start(self):
         self._running = True
-        self._animate()
+        self._x = -150
+        self._loop()
 
     def stop(self):
         self._running = False
-        self._shimmer_x = -200
         self.coords(self._shimmer, 0, 0, 0, 0)
 
-    def _animate(self):
+    def _loop(self):
         if not self._running:
             return
-        w = self.winfo_width() or 440
-        h = self.winfo_height() or 14
-        self._shimmer_x += 6
-        if self._shimmer_x > w + 200:
-            self._shimmer_x = -200
-        # Draw shimmer — white glow moving left to right
-        sx = self._shimmer_x
-        self.coords(self._shimmer, sx - 60, 2, sx + 60, h - 2)
-        # Fade edges with gradient-like effect using multiple rects
-        self.after(16, self._animate)
+        self._x += 5
+        if self._x > self._w + 150:
+            self._x = -150
+        # Shimmer is a soft white band
+        self.coords(self._shimmer,
+                    self._x - 80, 2,
+                    self._x + 80, self._h - 2)
+        self.after(16, self._loop)
+
+# ── Step Widget ───────────────────────────────────────────────────────────────
+class StepRow(tk.Frame):
+    def __init__(self, parent, number, title, subtitle, **kwargs):
+        super().__init__(parent, bg=SURFACE, **kwargs)
+        self.number = number
+        self.title = title
+        self.subtitle = subtitle
+        self._active = False
+        self._done = False
+        self._build()
+
+    def _build(self):
+        self.num_canvas = tk.Canvas(self, width=36, height=36,
+                                     bg=SURFACE, highlightthickness=0)
+        self.num_canvas.pack(side="left", padx=(0, 12))
+        self._draw_num()
+
+        text_frame = tk.Frame(self, bg=SURFACE)
+        text_frame.pack(side="left", fill="x", expand=True)
+        self.title_lbl = tk.Label(text_frame, text=self.title.upper(),
+                                   bg=SURFACE, fg=MUTED,
+                                   font=("Segoe UI", 8, "bold"))
+        self.title_lbl.pack(anchor="w")
+        self.sub_lbl = tk.Label(text_frame, text=self.subtitle,
+                                 bg=SURFACE, fg=MUTED,
+                                 font=("Segoe UI", 8))
+        self.sub_lbl.pack(anchor="w")
+
+    def _draw_num(self):
+        c = self.num_canvas
+        c.delete("all")
+        if self._done:
+            c.create_oval(2, 2, 34, 34, fill=ACCENT, outline="")
+            c.create_text(18, 18, text="✓", fill="white", font=("Segoe UI", 12, "bold"))
+        elif self._active:
+            c.create_oval(2, 2, 34, 34, fill=ACCENT, outline=ACCENT2, width=2)
+            c.create_text(18, 18, text=str(self.number), fill="white", font=("Segoe UI", 10, "bold"))
+        else:
+            c.create_oval(2, 2, 34, 34, fill="#1a1a2e", outline=BORDER, width=1)
+            c.create_text(18, 18, text=str(self.number), fill=MUTED, font=("Segoe UI", 10))
+
+    def set_active(self, subtitle=None):
+        self._active = True
+        self._done = False
+        self.title_lbl.configure(fg=ACCENT2)
+        self.sub_lbl.configure(fg=TEXT)
+        if subtitle:
+            self.sub_lbl.configure(text=subtitle)
+        self._draw_num()
+
+    def set_done(self):
+        self._active = False
+        self._done = True
+        self.title_lbl.configure(fg=SUCCESS)
+        self.sub_lbl.configure(fg=SUCCESS)
+        self._draw_num()
+
+    def set_error(self, msg=None):
+        self._active = False
+        self.title_lbl.configure(fg=ERROR)
+        self.sub_lbl.configure(fg=ERROR)
+        if msg:
+            self.sub_lbl.configure(text=msg)
+        self.num_canvas.delete("all")
+        c = self.num_canvas
+        c.create_oval(2, 2, 34, 34, fill="#3a0a0a", outline=ERROR, width=1)
+        c.create_text(18, 18, text="✕", fill=ERROR, font=("Segoe UI", 12, "bold"))
 
 # ── Main App ──────────────────────────────────────────────────────────────────
 class RainyInstaller(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title(APP_NAME)
-        self.geometry("520x440")
+        self.geometry("680x580")
         self.resizable(False, False)
-        self.configure(bg="#050a0f")
+        self.configure(bg=BG)
+        self.attributes('-alpha', 0.0)
         self.hwid = get_hwid()
         self._installing = False
-        self._alpha = 0.0
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self._build_ui()
         self._fade_in()
-        self._check_banned()
+        self.after(500, self._check_banned)
 
     def _fade_in(self):
-        self._alpha += 0.06
-        if self._alpha <= 1.0:
-            self.attributes('-alpha', min(self._alpha, 1.0))
-            self.after(20, self._fade_in)
+        a = self.attributes('-alpha')
+        if a < 1.0:
+            self.attributes('-alpha', min(a + 0.07, 1.0))
+            self.after(18, self._fade_in)
 
     def _check_banned(self):
         try:
@@ -316,117 +427,139 @@ class RainyInstaller(tk.Tk):
                               json={"hwid": self.hwid}, timeout=5)
             data = r.json()
             if data.get("banned"):
-                self._set_status("Your device is banned. Contact @8xgl.", "#ff5566")
+                self.step1.set_error("Your device is banned. Contact @8xgl.")
                 self.install_btn.configure(state="disabled")
         except:
             pass
 
     def _on_close(self):
         if self._installing:
-            threading.Thread(target=emergency_cleanup, args=(self.hwid,), daemon=True).start()
+            threading.Thread(target=emergency_cleanup,
+                             args=(self.hwid,), daemon=True).start()
         else:
+            unlock_input()
             self.destroy()
 
     def _build_ui(self):
+        W, H = 680, 580
+
         # Animated background
-        self.bg_canvas = AnimatedBackground(
-            self, width=520, height=440, bg="#050a0f",
-            highlightthickness=0
-        )
-        self.bg_canvas.place(x=0, y=0)
+        self.bg = AnimatedBackground(self, W, H)
+        self.bg.place(x=0, y=0)
 
-        # Content frame on top of canvas
-        content = tk.Frame(self, bg="#050a0f")
-        content.place(x=0, y=0, width=520, height=440)
+        # Content overlay
+        content = tk.Frame(self, bg=BG)
+        content.place(x=0, y=0, width=W, height=H)
 
-        # Icon
-        icon_canvas = tk.Canvas(content, width=52, height=52,
-                                bg="#050a0f", highlightthickness=0)
-        icon_canvas.pack(pady=(22, 0))
-        icon_canvas.create_rectangle(2, 2, 50, 50, fill="#0a1a2a",
-                                     outline="#4ab8ff", width=2)
-        icon_canvas.create_rectangle(6, 6, 46, 46, fill="#0077cc", outline="")
-        icon_canvas.create_text(26, 27, text="R", fill="white",
-                                font=("Segoe UI", 20, "bold"))
+        # ── Header ──
+        header = tk.Frame(content, bg=BG)
+        header.pack(pady=(28, 0))
 
-        # Title
-        tk.Label(content, text="Rainy.solutions", bg="#050a0f", fg="#4ab8ff",
-                 font=("Segoe UI", 18, "bold")).pack(pady=(6, 1))
-        tk.Label(content, text="SCRIPT INSTALLER", bg="#050a0f", fg="#1a4a6a",
-                 font=("Segoe UI", 7, "bold")).pack()
-        tk.Label(content, text="Close Zen Studio before installing",
-                 bg="#050a0f", fg="#2a5a7a", font=("Segoe UI", 8)).pack()
+        # Logo icon
+        ic = tk.Canvas(header, width=56, height=56, bg=BG, highlightthickness=0)
+        ic.pack()
+        ic.create_rectangle(4, 4, 52, 52, fill="#1a0a2e", outline=ACCENT, width=2)
+        ic.create_rectangle(10, 10, 46, 46, fill=ACCENT, outline="")
+        ic.create_text(28, 29, text="R", fill="white", font=("Segoe UI", 22, "bold"))
 
-        # Separator line
-        sep = tk.Frame(content, bg="#1a2d42", height=1)
-        sep.pack(fill="x", padx=40, pady=(12, 0))
+        tk.Label(header, text="RAINY.SOLUTIONS", bg=BG, fg=ACCENT2,
+                 font=("Segoe UI", 16, "bold")).pack(pady=(6, 0))
+        tk.Label(header, text="INSTALLER", bg=BG, fg=MUTED,
+                 font=("Segoe UI", 8, "bold"), letterSpacing=8).pack()
+        tk.Label(header, text="Enhance your experience. Install. Inject. Dominate.",
+                 bg=BG, fg=MUTED, font=("Segoe UI", 8)).pack(pady=(2, 0))
 
-        # Form
-        form = tk.Frame(content, bg="#050a0f")
-        form.pack(pady=12, padx=40, fill="x")
+        # ── Main card ──
+        card = tk.Frame(content, bg=SURFACE,
+                        highlightthickness=1, highlightbackground=BORDER)
+        card.pack(padx=40, pady=18, fill="x")
 
-        tk.Label(form, text="LICENSE KEY", bg="#050a0f", fg="#2a5a7a",
+        # Key input
+        key_frame = tk.Frame(card, bg=SURFACE)
+        key_frame.pack(fill="x", padx=24, pady=(18, 0))
+        tk.Label(key_frame, text="LICENSE KEY", bg=SURFACE, fg=MUTED,
                  font=("Segoe UI", 7, "bold")).pack(anchor="w")
+        entry_wrap = tk.Frame(key_frame, bg=ACCENT, padx=1, pady=1)
+        entry_wrap.pack(fill="x", pady=(4, 0))
         self.key_var = tk.StringVar()
-        key_frame = tk.Frame(form, bg="#4ab8ff", padx=1, pady=1)
-        key_frame.pack(fill="x", pady=(3, 0))
-        self.key_entry = tk.Entry(key_frame, textvariable=self.key_var,
-                                  bg="#060e18", fg="#4ab8ff",
-                                  insertbackground="#4ab8ff",
-                                  relief="flat", font=("Courier New", 12),
-                                  bd=0)
-        self.key_entry.pack(fill="x", ipady=7, padx=1, pady=1)
+        self.key_entry = tk.Entry(entry_wrap, textvariable=self.key_var,
+                                   bg="#0d0d1a", fg=ACCENT2,
+                                   insertbackground=ACCENT2,
+                                   relief="flat", font=("Courier New", 12), bd=0)
+        self.key_entry.pack(fill="x", ipady=8, padx=1, pady=1)
 
-        tk.Label(form, text="SCRIPT", bg="#050a0f", fg="#2a5a7a",
-                 font=("Segoe UI", 7, "bold")).pack(anchor="w", pady=(10, 0))
-
+        # Script selector
+        script_frame = tk.Frame(card, bg=SURFACE)
+        script_frame.pack(fill="x", padx=24, pady=(12, 0))
+        tk.Label(script_frame, text="SCRIPT", bg=SURFACE, fg=MUTED,
+                 font=("Segoe UI", 7, "bold")).pack(anchor="w")
         style = ttk.Style()
         style.theme_use('clam')
-        style.configure("Dark.TCombobox",
-                         fieldbackground="#060e18",
-                         background="#060e18",
-                         foreground="#4ab8ff",
-                         selectbackground="#0077cc",
-                         selectforeground="white",
-                         bordercolor="#4ab8ff",
-                         arrowcolor="#4ab8ff")
+        style.configure("P.TCombobox",
+                         fieldbackground="#0d0d1a", background="#0d0d1a",
+                         foreground=ACCENT2, selectbackground=ACCENT,
+                         selectforeground="white", bordercolor=ACCENT,
+                         arrowcolor=ACCENT2)
         self.script_var = tk.StringVar()
-        self.script_combo = ttk.Combobox(form, textvariable=self.script_var,
+        self.script_combo = ttk.Combobox(script_frame, textvariable=self.script_var,
                                           state="readonly", font=("Segoe UI", 10),
-                                          style="Dark.TCombobox")
-        self.script_combo.pack(fill="x", pady=(3, 0))
+                                          style="P.TCombobox")
+        self.script_combo.pack(fill="x", pady=(4, 0))
         self._load_scripts()
 
-        # Install button
-        self.install_btn = tk.Button(content, text="⚡  Install to Zen",
-                                      bg="#0077cc", fg="white",
-                                      activebackground="#4ab8ff",
-                                      activeforeground="#050a0f",
-                                      relief="flat",
-                                      font=("Segoe UI", 11, "bold"),
-                                      cursor="hand2",
-                                      command=self._start_install,
-                                      bd=0)
-        self.install_btn.pack(pady=(8, 0), padx=40, fill="x", ipady=11)
+        # Divider
+        tk.Frame(card, bg=BORDER, height=1).pack(fill="x", padx=24, pady=16)
 
-        # Bind hover effects
-        self.install_btn.bind("<Enter>", lambda e: self.install_btn.configure(bg="#4ab8ff", fg="#050a0f"))
-        self.install_btn.bind("<Leave>", lambda e: self.install_btn.configure(bg="#0077cc", fg="white"))
+        # Steps
+        steps_frame = tk.Frame(card, bg=SURFACE)
+        steps_frame.pack(fill="x", padx=24, pady=(0, 4))
 
-        # Status
-        self.status_var = tk.StringVar(value="Enter your key and click Install to Zen")
-        self.status_label = tk.Label(content, textvariable=self.status_var,
-                                      bg="#050a0f", fg="#2a5a7a",
-                                      font=("Segoe UI", 8), wraplength=440)
-        self.status_label.pack(pady=(10, 0))
+        self.step1 = StepRow(steps_frame, 1, "Preparing", "Checking system compatibility...")
+        self.step1.pack(fill="x", pady=4)
+        tk.Frame(steps_frame, bg=BORDER, width=2, height=16).pack(anchor="w", padx=17)
 
-        # Custom shimmer progress bar
-        self.shimmer = ShimmerBar(content, width=440, height=14)
-        self.shimmer.pack(pady=(8, 0), padx=40)
+        self.step2 = StepRow(steps_frame, 2, "Validating", "Validating your license key...")
+        self.step2.pack(fill="x", pady=4)
+        tk.Frame(steps_frame, bg=BORDER, width=2, height=16).pack(anchor="w", padx=17)
 
-        # Footer
-        tk.Label(content, text="rainy.solutions", bg="#050a0f", fg="#0d2035",
-                 font=("Segoe UI", 7)).pack(side="bottom", pady=8)
+        self.step3 = StepRow(steps_frame, 3, "Installing", "Programming your Cronus Zen...")
+        self.step3.pack(fill="x", pady=4)
+        tk.Frame(steps_frame, bg=BORDER, width=2, height=16).pack(anchor="w", padx=17)
+
+        self.step4 = StepRow(steps_frame, 4, "Finalizing", "Cleaning up and finishing...")
+        self.step4.pack(fill="x", pady=(4, 18))
+
+        # ── Install button ──
+        self.install_btn = tk.Button(content, text="⚡   Install to Zen",
+                                      bg=ACCENT, fg="white",
+                                      activebackground=ACCENT2,
+                                      activeforeground="white",
+                                      relief="flat", font=("Segoe UI", 11, "bold"),
+                                      cursor="hand2", command=self._start_install, bd=0)
+        self.install_btn.pack(padx=40, fill="x", ipady=12)
+        self.install_btn.bind("<Enter>", lambda e: self.install_btn.configure(bg=ACCENT2))
+        self.install_btn.bind("<Leave>", lambda e: self.install_btn.configure(bg=ACCENT))
+
+        # ── Footer badge ──
+        badge = tk.Frame(content, bg=BG)
+        badge.pack(pady=(10, 0))
+        tk.Label(badge, text="🛡  Safe  •  Secure  •  Undetected",
+                 bg=BG, fg=ACCENT2, font=("Segoe UI", 8, "bold")).pack()
+        tk.Label(badge, text="Your system is protected.",
+                 bg=BG, fg=MUTED, font=("Segoe UI", 7)).pack()
+
+        # ── Bottom status bar ──
+        bottom = tk.Frame(content, bg="#080810")
+        bottom.pack(side="bottom", fill="x")
+
+        self.status_var = tk.StringVar(value="Ready to install")
+        self.status_lbl = tk.Label(bottom, textvariable=self.status_var,
+                                    bg="#080810", fg=MUTED,
+                                    font=("Segoe UI", 8), anchor="w")
+        self.status_lbl.pack(side="left", padx=12, pady=6)
+
+        self.shimmer = ShimmerBar(bottom, w=680, h=4)
+        self.shimmer.pack(side="bottom", fill="x")
 
     def _load_scripts(self):
         try:
@@ -439,18 +572,18 @@ class RainyInstaller(tk.Tk):
             self.script_combo["values"] = ["default"]
             self.script_combo.current(0)
 
-    def _set_status(self, msg, color="#2a5a7a"):
+    def _set_status(self, msg, color=None):
         self.status_var.set(msg)
-        self.status_label.configure(fg=color)
+        self.status_lbl.configure(fg=color or MUTED)
 
     def _start_install(self):
         key = self.key_var.get().strip().upper()
         script = self.script_var.get()
         if len(key) < 5:
-            self._set_status("Please enter your license key.", "#ff5566")
+            self._set_status("Please enter your license key.", ERROR)
             return
         self._installing = True
-        self.install_btn.configure(state="disabled", bg="#0a2a3a")
+        self.install_btn.configure(state="disabled", bg="#3a1a6a")
         self.shimmer.start()
         lock_input()
         threading.Thread(target=self._install, args=(key, script), daemon=True).start()
@@ -459,74 +592,88 @@ class RainyInstaller(tk.Tk):
         global current_tmp_path
         tmp_path = None
         try:
-            self._set_status("Looking for Zen Studio...", "#4ab8ff")
+            # Step 1: Find Zen Studio
+            self.step1.set_active("Checking system compatibility...")
+            self._set_status("Looking for Zen Studio...", ACCENT2)
             zen_path = find_zen_studio()
             if not zen_path:
-                self._set_status("Zen Studio not found. Please install Zen Studio first.", "#ff5566")
-                self._installing = False
-                self._reset_ui()
+                self.step1.set_error("Zen Studio not found. Please install it first.")
+                self._set_status("Zen Studio not found.", ERROR)
+                self._done(success=False)
                 return
+            self.step1.set_done()
 
-            self._set_status("Validating key...", "#4ab8ff")
+            # Step 2: Validate key
+            self.step2.set_active("Validating your license key...")
+            self._set_status("Validating key...", ACCENT2)
             response = requests.post(
                 f"{API_BASE}/api/redeem",
                 json={"key": key, "script": script, "hwid": self.hwid},
                 timeout=15
             )
-
             if response.status_code == 403:
                 error = response.json().get("error", "Invalid key.")
-                self._set_status(error, "#ff5566")
-                self._installing = False
-                self._reset_ui()
+                self.step2.set_error(error)
+                self._set_status(error, ERROR)
+                self._done(success=False)
                 return
-
             if response.status_code != 200:
-                self._set_status("Server error. Please try again.", "#ff5566")
-                self._installing = False
-                self._reset_ui()
+                self.step2.set_error("Server error. Please try again.")
+                self._set_status("Server error.", ERROR)
+                self._done(success=False)
                 return
+            self.step2.set_done()
 
-            self._set_status("Decrypting script...", "#4ab8ff")
+            # Step 3: Install
+            self.step3.set_active("Programming your Cronus Zen...")
+            self._set_status("Installing to your Cronus Zen — do not close...", ACCENT2)
             encrypted_bytes = response.content
             decrypted = decrypt_script(encrypted_bytes, key)
-
             tmp_fd, tmp_path = tempfile.mkstemp(suffix=".gpc")
             current_tmp_path = tmp_path
             with os.fdopen(tmp_fd, 'wb') as f:
                 f.write(decrypted)
-
-            self._set_status("Installing to your Cronus Zen — do not close...", "#4ab8ff")
             automate_zen_studio(zen_path, tmp_path)
+            self.step3.set_done()
 
+            # Step 4: Cleanup
+            self.step4.set_active("Cleaning up...")
+            self._set_status("Finalizing...", ACCENT2)
             try:
                 os.remove(tmp_path)
                 tmp_path = None
                 current_tmp_path = None
             except:
                 pass
+            time.sleep(0.5)
+            self.step4.set_done()
 
-            self._installing = False
-            self._set_status("✓ Script installed! Your Cronus Zen is ready.", "#44ffaa")
+            self._set_status("✓ Script installed! Your Cronus Zen is ready.", SUCCESS)
+            self._done(success=True)
 
         except requests.exceptions.ConnectionError:
-            self._installing = False
-            self._set_status("Cannot connect to server. Check your internet.", "#ff5566")
+            self._set_status("Cannot connect to server. Check your internet.", ERROR)
+            self._done(success=False)
         except Exception as e:
-            self._installing = False
-            self._set_status(f"Error: {str(e)}", "#ff5566")
+            self._set_status(f"Error: {str(e)}", ERROR)
+            self._done(success=False)
         finally:
             if tmp_path and os.path.exists(tmp_path):
                 try:
                     os.remove(tmp_path)
                 except:
                     pass
-            self._reset_ui()
 
-    def _reset_ui(self):
+    def _done(self, success=True):
+        self._installing = False
         unlock_input()
         self.shimmer.stop()
-        self.install_btn.configure(state="normal", bg="#0077cc", fg="white")
+        if success:
+            self.install_btn.configure(state="disabled", bg="#1a3a1a",
+                                        fg=SUCCESS, text="✓  Installation Complete")
+        else:
+            self.install_btn.configure(state="normal", bg=ACCENT, fg="white",
+                                        text="⚡   Install to Zen")
 
 
 if __name__ == "__main__":
