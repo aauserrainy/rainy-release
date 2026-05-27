@@ -305,10 +305,14 @@ class ShimmerBar(tk.Canvas):
         self._h = h
         self._running = False
         self._x = -150
-        # Track background
-        self.create_rectangle(0, 0, w, h, fill="#0d0d1a", outline=BORDER)
+        # Track background - draw after widget is ready
+        self.after(100, self._draw_bg)
         # Shimmer rect
         self._shimmer = self.create_rectangle(0, 0, 0, 0, fill="white", outline="")
+
+    def _draw_bg(self):
+        self.create_rectangle(0, 0, self._w, self._h,
+                              fill="#0d0d1a", outline=BORDER)
 
     def start(self):
         self._running = True
@@ -558,7 +562,7 @@ class RainyInstaller(tk.Tk):
                                     font=("Segoe UI", 8), anchor="w")
         self.status_lbl.pack(side="left", padx=12, pady=6)
 
-        self.shimmer = ShimmerBar(bottom, w=680, h=4)
+        self.shimmer = ShimmerBar(bottom, w=660, h=4)
         self.shimmer.pack(side="bottom", fill="x")
 
     def _load_scripts(self):
