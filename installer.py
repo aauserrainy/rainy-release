@@ -195,97 +195,122 @@ def automate_zen_studio(zen_path, gpc_path):
     proc = subprocess.Popen([zen_path, gpc_path])
 
     # Wait for Zen Studio window
-    hwnd = None
+    zen_window = None
     for _ in range(30):
         time.sleep(1)
-        hwnd = find_zen_hwnd()
-        if hwnd:
+        for win in gw.getAllWindows():
+            if "zen" in win.title.lower() and win.width > 200:
+                zen_window = win
+                break
+        if zen_window:
             break
 
-    if not hwnd:
+    if not zen_window:
         proc.kill()
         raise Exception("Zen Studio did not open. Please install Zen Studio first.")
 
-    # Immediately move off screen before it finishes loading
-    # Use a large fixed size so coords are consistent
-    HIDDEN_X = -3000
-    WIN_W = 1920
-    WIN_H = 1080
+    # Wait for full load
+    time.sleep(4)
 
-    # Move off screen right away — before user can see anything
-    win32gui.SetWindowPos(hwnd, win32con.HWND_BOTTOM,
-                          HIDDEN_X, 0, WIN_W, WIN_H,
-                          win32con.SWP_NOACTIVATE)
-    time.sleep(0.3)
-
-    # Maximize off screen for consistent coords
-    win32gui.ShowWindow(hwnd, win32con.SW_SHOWMAXIMIZED)
-    time.sleep(0.5)
-
-    # Move off screen again after maximize (maximize may reposition it)
-    win32gui.SetWindowPos(hwnd, win32con.HWND_BOTTOM,
-                          HIDDEN_X, 0, WIN_W, WIN_H,
-                          win32con.SWP_NOACTIVATE)
-
-    # Wait for full load while hidden
-    time.sleep(3)
-
-    # Use fixed coords based on WIN_W x WIN_H
-    ww = WIN_W
-    wh = WIN_H
-
-    # All clicks sent directly to window handle — mouse never moves
-    # Click Programmer tab
-    hwnd_click(hwnd, int(ww * 0.50), int(wh * 0.095))
-    time.sleep(1.5)
-
-    # Click 3 lines button
-    hwnd_click(hwnd, int(ww * 0.038), int(wh * 0.355))
-    time.sleep(1.5)
-
-    # Click first file in list
-    file_x = int(ww * 0.75)
-    file_y = int(wh * 0.19)
-    hwnd_click(hwnd, file_x, file_y)
-    time.sleep(0.5)
-
-    # Drag to slot 2
-    slot2_x = int(ww * 0.72)
-    slot2_y = int(wh * 0.67)
-    hwnd_drag(hwnd, file_x, file_y, slot2_x, slot2_y)
-    time.sleep(1.5)
-
-    # Click Play button
-    hwnd_click(hwnd, int(ww * 0.038), int(wh * 0.520))
-    time.sleep(1)
-
-    # Wait for success popup — check for child windows
-    for _ in range(20):
-        time.sleep(0.5)
-        # Check for any popup dialog
-        def check_popup(hwnd_check, _):
-            title = win32gui.GetWindowText(hwnd_check).lower()
-            if any(word in title for word in ["success", "complete", "programm", "written"]):
-                win32gui.PostMessage(hwnd_check, win32con.WM_CLOSE, 0, 0)
+    # Force maximize using win32 directly — more reliable than pygetwindow
+    try:
+        hwnd = win32gui.FindWindow(None, zen_window.title)
+        win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
+        time.sleep(1.5)
+        # Re-get window after maximize
+        for win in gw.getAllWindows():
+            if "zen" in win.title.lower() and win.width > 200:
+                zen_window = win
+                break
+    except:
         try:
-            win32gui.EnumWindows(check_popup, None)
+            zen_window.maximize()
+            time.sleep(1.5)
         except:
             pass
-        # Also send Enter key to dismiss any popup
-        win32api.SendMessage(hwnd, win32con.WM_KEYDOWN, win32con.VK_RETURN, 0)
-        win32api.SendMessage(hwnd, win32con.WM_KEYUP, win32con.VK_RETURN, 0)
 
-    # Force close Zen Studio
+    # Bring to front
     try:
+        zen_window.activate()
+        time.sleep(0.5)
+    except:
+        pass
+
+    wx = zen_window.left
+    wy = zen_window.top
+    ww = zen_window.width
+    wh = zen_window.height
+
+    def locked_click(x, y):
+        block_keyboard()
+        pyautogui.click(x, y)
+        unblock_keyboard()
+
+    def locked_drag(x1, y1, x2, y2):
+        block_keyboard()
+        pyautogui.moveTo(x1, y1, duration=0.2)
+        pyautogui.mouseDown()
+        time.sleep(0.2)
+        pyautogui.moveTo(x2, y2, duration=0.5)
+        time.sleep(0.2)
+        pyautogui.mouseUp()
+        unblock_keyboard()
+
+    try:
+        # Click Programmer tab
+        locked_click(wx + int(ww * 0.50), wy + int(wh * 0.095))
+        time.sleep(1.5)
+
+        # Click 3 lines button
+        locked_click(wx + int(ww * 0.038), wy + int(wh * 0.355))
+        time.sleep(1.5)
+
+        # Click first file in list
+        file_x = wx + int(ww * 0.75)
+        file_y = wy + int(wh * 0.19)
+        locked_click(file_x, file_y)
+        time.sleep(0.5)
+
+        # Drag to slot 2
+        slot2_x = wx + int(ww * 0.72)
+        slot2_y = wy + int(wh * 0.67)
+        locked_drag(file_x, file_y, slot2_x, slot2_y)
+        time.sleep(1.5)
+
+        # Click Play button
+        locked_click(wx + int(ww * 0.038), wy + int(wh * 0.520))
+        time.sleep(1)
+
+        # Wait for success popup
+        for _ in range(20):
+            time.sleep(0.5)
+            for win in gw.getAllWindows():
+                title = win.title.lower()
+                if any(word in title for word in ["success", "complete", "programm", "written", "ok"]):
+                    try:
+                        win.close()
+                    except:
+                        pass
+                    break
+            block_keyboard()
+            pyautogui.press("enter")
+            unblock_keyboard()
+
+    except Exception as e:
+        unblock_keyboard()
+        raise e
+
+    # Force close Zen Studio INSTANTLY
+    try:
+        hwnd = win32gui.FindWindow(None, zen_window.title)
         win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
     except:
         pass
-    time.sleep(0.5)
+    time.sleep(0.2)
     try:
         proc.terminate()
     except:
         pass
-    time.sleep(0.3)
     try:
         proc.kill()
     except:
