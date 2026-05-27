@@ -226,7 +226,7 @@ def automate_zen_studio(zen_path, gpc_path):
     time.sleep(1)
 
     # Wait for success popup
-    for _ in range(20):
+    for _ in range(40):
         time.sleep(0.5)
         for win in gw.getAllWindows():
             title = win.title.lower()
@@ -263,12 +263,12 @@ class AnimatedBackground(tk.Canvas):
     def _init_lines(self):
         import random
         random.seed(99)
-        for _ in range(20):
+        for _ in range(40):
             x1 = random.randint(-100, self.w + 100)
             y1 = random.randint(-100, self.h + 100)
             angle = random.uniform(-45, 45)
             length = random.randint(60, 180)
-            speed = random.uniform(0.2, 0.8)
+            speed = random.uniform(0.8, 2.5)
             alpha = random.uniform(0.05, 0.18)
             dx = math.cos(math.radians(angle)) * speed
             dy = math.sin(math.radians(angle)) * speed
@@ -294,7 +294,7 @@ class AnimatedBackground(tk.Canvas):
             ex = l['x'] + math.cos(math.radians(l['angle'])) * l['length']
             ey = l['y'] + math.sin(math.radians(l['angle'])) * l['length']
             self.coords(l['id'], l['x'], l['y'], ex, ey)
-        self.after(33, self._animate)
+        self.after(16, self._animate)
 
 # ── Shimmer Progress Bar ──────────────────────────────────────────────────────
 class ShimmerBar(tk.Frame):
@@ -466,13 +466,6 @@ class RainyInstaller(tk.Tk):
         header = tk.Frame(content, bg=BG)
         header.pack(pady=(28, 0))
 
-        # Logo icon
-        ic = tk.Canvas(header, width=56, height=56, bg=BG, highlightthickness=0)
-        ic.pack()
-        ic.create_rectangle(4, 4, 52, 52, fill="#1a0a2e", outline=ACCENT, width=2)
-        ic.create_rectangle(10, 10, 46, 46, fill=ACCENT, outline="")
-        ic.create_text(28, 29, text="R", fill="white", font=("Segoe UI", 22, "bold"))
-
         tk.Label(header, text="RAINY.SOLUTIONS", bg=BG, fg=ACCENT2,
                  font=("Segoe UI", 16, "bold")).pack(pady=(6, 0))
         tk.Label(header, text="I N S T A L L E R", bg=BG, fg=MUTED,
@@ -576,7 +569,7 @@ class RainyInstaller(tk.Tk):
         try:
             r = requests.get(f"{API_BASE}/api/scripts", timeout=5)
             scripts = r.json().get("scripts", [])
-            self.script_combo["values"] = scripts
+            self.script_combo["values"] = ["Rain" for _ in scripts]
             if scripts:
                 self.script_combo.current(0)
         except:
