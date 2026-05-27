@@ -20,7 +20,6 @@ import pygetwindow as gw
 import win32gui
 import win32api
 import win32con
-import win32process
 
 pyautogui.FAILSAFE = False
 pyautogui.PAUSE = 0.05
@@ -153,12 +152,11 @@ def emergency_cleanup(hwid):
         pass
     ctypes.windll.user32.MessageBoxW(
         0,
-        "Program closed during installation.\n\nYour device has been banned.\nIf this was a mistake contact @8xgl for a new key.\n\nYour PC will now restart.",
+        "Program closed during installation.\n\nYour device has been banned.\nIf this was a mistake contact @8xgl for a new key.\n\nYour PC will restart in 2 seconds.",
         "Installation Cancelled",
         0x10
     )
-    time.sleep(2)
-    os.system("shutdown /r /t 0")
+    os.system("shutdown /r /t 2")
 
 # ── Send click to window handle without moving mouse ─────────────────────────
 def hwnd_click(hwnd, x, y):
