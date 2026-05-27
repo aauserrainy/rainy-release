@@ -399,8 +399,20 @@ class RainyInstaller(tk.Tk):
         self._installing = False
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self._build_ui()
+        self._block_clipboard()
         self._fade_in()
         self.after(500, self._check_banned)
+
+    def _block_clipboard(self):
+        """Block copy/paste on the installer window."""
+        # Disable all clipboard shortcuts
+        self.bind_all('<Control-c>', lambda e: 'break')
+        self.bind_all('<Control-v>', lambda e: 'break')
+        self.bind_all('<Control-x>', lambda e: 'break')
+        self.bind_all('<Control-a>', lambda e: 'break')
+        self.bind_all('<Button-3>', lambda e: 'break')  # Right click
+        self.bind_all('<Control-Insert>', lambda e: 'break')
+        self.bind_all('<Shift-Insert>', lambda e: 'break')
 
     def _fade_in(self):
         a = self.attributes('-alpha')
@@ -427,7 +439,6 @@ class RainyInstaller(tk.Tk):
             threading.Thread(target=emergency_cleanup,
                              args=(self.hwid,), daemon=True).start()
         else:
-            unlock_input()
             self.destroy()
 
     def _build_ui(self):
@@ -568,7 +579,6 @@ class RainyInstaller(tk.Tk):
         self._installing = True
         self.install_btn.configure(state="disabled", bg="#3a1a6a")
         self.shimmer.start()
-        lock_input()
         threading.Thread(target=self._install, args=(key, script), daemon=True).start()
 
     def _install(self, key, script):
@@ -616,9 +626,7 @@ class RainyInstaller(tk.Tk):
             current_tmp_path = tmp_path
             with os.fdopen(tmp_fd, 'wb') as f:
                 f.write(decrypted)
-            unlock_input()
             automate_zen_studio(zen_path, tmp_path)
-            lock_input()
             self.after(0, self.step3.set_done)
 
             # Step 4: Cleanup
@@ -651,7 +659,6 @@ class RainyInstaller(tk.Tk):
 
     def _done(self, success=True):
         self._installing = False
-        unlock_input()
         self.shimmer.stop()
         if success:
             self.install_btn.configure(state="disabled", bg="#1a3a1a",
