@@ -18,6 +18,7 @@ from cryptography.hazmat.backends import default_backend
 import pyautogui
 import pygetwindow as gw
 import win32gui
+import win32api
 import win32con
 
 pyautogui.FAILSAFE = False
@@ -67,6 +68,24 @@ def get_hwid():
     except:
         return hashlib.sha256(str(uuid.getnode()).encode()).hexdigest()
 
+# ── Input lock ────────────────────────────────────────────────────────────────
+_input_locked = False
+
+def lock_input():
+    global _input_locked
+    try:
+        ctypes.windll.user32.BlockInput(True)
+        _input_locked = True
+    except:
+        pass
+
+def unlock_input():
+    global _input_locked
+    try:
+        ctypes.windll.user32.BlockInput(False)
+        _input_locked = False
+    except:
+        pass
 
 # ── Decryption ────────────────────────────────────────────────────────────────
 def decrypt_script(encrypted_bytes, license_key):
@@ -158,8 +177,6 @@ def find_zen_studio():
         except:
             pass
     return None
-
-
 def find_zen_hwnd():
     """Find Zen Studio window handle."""
     result = []
@@ -172,7 +189,6 @@ def find_zen_hwnd():
                 result.append(hwnd)
     win32gui.EnumWindows(callback, None)
     return result[0] if result else None
-
 
 # ── Automate Zen Studio ───────────────────────────────────────────────────────
 def automate_zen_studio(zen_path, gpc_path):
@@ -196,7 +212,7 @@ def automate_zen_studio(zen_path, gpc_path):
     # Wait for full load
     time.sleep(4)
 
-    # Force maximize using win32 directly
+    # Force maximize using win32 directly — more reliable than pygetwindow
     try:
         hwnd = win32gui.FindWindow(None, zen_window.title)
         win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
@@ -225,19 +241,18 @@ def automate_zen_studio(zen_path, gpc_path):
     ww = zen_window.width
     wh = zen_window.height
 
-    # ── Helpers defined INSIDE the function with correct indentation ──
     def locked_click(x, y):
-        pyautogui.moveTo(x, y, duration=0.15)
-        time.sleep(0.1)
+        # Block keyboard only, not mouse (mouse needed for pyautogui)
+        ctypes.windll.user32.BlockInput(False)  # ensure unlocked first
         pyautogui.click(x, y)
-        time.sleep(0.1)
 
     def locked_drag(x1, y1, x2, y2):
-        pyautogui.moveTo(x1, y1, duration=0.2)
+        ctypes.windll.user32.BlockInput(False)  # ensure unlocked first
+        pyautogui.moveTo(x1, y1, duration=0.3)
         pyautogui.mouseDown()
-        time.sleep(0.2)
-        pyautogui.moveTo(x2, y2, duration=0.5)
-        time.sleep(0.2)
+        time.sleep(0.3)
+        pyautogui.moveTo(x2, y2, duration=0.6)
+        time.sleep(0.3)
         pyautogui.mouseUp()
 
     try:
@@ -276,12 +291,15 @@ def automate_zen_studio(zen_path, gpc_path):
                     except:
                         pass
                     break
+            block_keyboard()
             pyautogui.press("enter")
+            unblock_keyboard()
 
     except Exception as e:
+        unblock_keyboard()
         raise e
 
-    # Force close Zen Studio
+    # Force close Zen Studio INSTANTLY
     try:
         hwnd = win32gui.FindWindow(None, zen_window.title)
         win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
@@ -296,7 +314,6 @@ def automate_zen_studio(zen_path, gpc_path):
         proc.kill()
     except:
         pass
-
 
 # ── Animated Background ───────────────────────────────────────────────────────
 class AnimatedBackground(tk.Canvas):
@@ -324,7 +341,7 @@ class AnimatedBackground(tk.Canvas):
             v = int(255 * alpha * 2.5)
             v = min(v, 255)
             color = f"#{v:02x}{v:02x}{v:02x}"
-            lid = self.create_line(x1, y1, x1 + length, y1 + length,
+            lid = self.create_line(x1, y1, x1+length, y1+length,
                                    fill=color, width=1)
             self.lines.append({'id': lid, 'x': x1, 'y': y1,
                                 'dx': dx, 'dy': dy, 'length': length,
@@ -342,7 +359,6 @@ class AnimatedBackground(tk.Canvas):
             ey = l['y'] + math.sin(math.radians(l['angle'])) * l['length']
             self.coords(l['id'], l['x'], l['y'], ex, ey)
         self.after(16, self._animate)
-
 
 # ── Shimmer Progress Bar ──────────────────────────────────────────────────────
 class ShimmerBar(tk.Frame):
@@ -365,7 +381,6 @@ class ShimmerBar(tk.Frame):
         self._bright = not self._bright
         self.configure(bg="white" if self._bright else "#0d0d1a")
         self.after(60, self._loop)
-
 
 # ── Step Widget ───────────────────────────────────────────────────────────────
 class StepRow(tk.Frame):
@@ -435,13 +450,12 @@ class StepRow(tk.Frame):
         c.create_oval(2, 2, 34, 34, fill="#1a0a0a", outline=ERROR, width=1)
         c.create_text(18, 18, text="✕", fill=ERROR, font=("Segoe UI", 12, "bold"))
 
-
 # ── Main App ──────────────────────────────────────────────────────────────────
 class RainyInstaller(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title(APP_NAME)
-        self.geometry("920x760")
+        self.geometry("680x580")
         self.resizable(False, False)
         self.configure(bg=BG)
         self.attributes('-alpha', 0.0)
@@ -454,11 +468,13 @@ class RainyInstaller(tk.Tk):
         self.after(500, self._check_banned)
 
     def _block_clipboard(self):
+        """Block copy/paste on the installer window."""
+        # Disable all clipboard shortcuts
         self.bind_all('<Control-c>', lambda e: 'break')
         self.bind_all('<Control-v>', lambda e: 'break')
         self.bind_all('<Control-x>', lambda e: 'break')
         self.bind_all('<Control-a>', lambda e: 'break')
-        self.bind_all('<Button-3>', lambda e: 'break')
+        self.bind_all('<Button-3>', lambda e: 'break')  # Right click
         self.bind_all('<Control-Insert>', lambda e: 'break')
         self.bind_all('<Shift-Insert>', lambda e: 'break')
 
@@ -490,7 +506,9 @@ class RainyInstaller(tk.Tk):
             self.destroy()
 
     def _build_ui(self):
-        W, H = 920, 760
+        W, H = 620, 560
+
+        # Update window size
         self.geometry(f"{W}x{H}")
 
         # Animated background
@@ -598,6 +616,7 @@ class RainyInstaller(tk.Tk):
         bottom = tk.Frame(content, bg="#050505")
         bottom.pack(side="bottom", fill="x")
 
+        # Shimmer line at very bottom
         self.shimmer = ShimmerBar(bottom)
         self.shimmer.pack(side="bottom", fill="x")
 
@@ -678,7 +697,7 @@ class RainyInstaller(tk.Tk):
 
             # Step 3: Install
             self.after(0, lambda: self.step3.set_active("Programming your Cronus Zen..."))
-            self._set_status("Installing to your Cronus Zen — do not close...", ACCENT2)
+            self._set_status("⚠  DO NOT MOVE YOUR MOUSE DURING THIS PROCESS — IT WILL RESULT IN A HWID BAN!", "#ffcc00")
             encrypted_bytes = response.content
             decrypted = decrypt_script(encrypted_bytes, key)
             tmp_fd, tmp_path = tempfile.mkstemp(suffix=".gpc")
