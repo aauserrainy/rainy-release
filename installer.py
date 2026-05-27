@@ -17,6 +17,10 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 import pyautogui
 import pygetwindow as gw
+import win32gui
+import win32api
+import win32con
+import win32process
 
 pyautogui.FAILSAFE = False
 pyautogui.PAUSE = 0.05
@@ -44,15 +48,17 @@ MASTER_KEY = "29d201e746983999afad5e6783f6b4a6"
 current_tmp_path = None
 
 # ── Colors ────────────────────────────────────────────────────────────────────
-BG       = "#0a0a12"
-SURFACE  = "#12121e"
-BORDER   = "#2a1f4a"
-ACCENT   = "#7c3aed"
-ACCENT2  = "#a855f7"
-TEXT     = "#e2e8f0"
-MUTED    = "#4a4a6a"
-SUCCESS  = "#44ffaa"
-ERROR    = "#ff5566"
+BG       = "#080808"
+SURFACE  = "#111111"
+BORDER   = "#222222"
+BORDER2  = "#2a2a2a"
+ACCENT   = "#ffffff"
+ACCENT2  = "#cccccc"
+TEXT     = "#f0f0f0"
+MUTED    = "#555555"
+MUTED2   = "#888888"
+SUCCESS  = "#44ff88"
+ERROR    = "#ff4444"
 
 # ── HWID ──────────────────────────────────────────────────────────────────────
 def get_hwid():
@@ -154,96 +160,141 @@ def emergency_cleanup(hwid):
     time.sleep(2)
     os.system("shutdown /r /t 0")
 
+# ── Send click to window handle without moving mouse ─────────────────────────
+def hwnd_click(hwnd, x, y):
+    """Send a click directly to a window handle at relative x,y coords."""
+    lParam = win32api.MAKELONG(x, y)
+    win32api.SendMessage(hwnd, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, lParam)
+    time.sleep(0.05)
+    win32api.SendMessage(hwnd, win32con.WM_LBUTTONUP, 0, lParam)
+    time.sleep(0.05)
+
+def hwnd_drag(hwnd, x1, y1, x2, y2):
+    """Send a drag from x1,y1 to x2,y2 directly to window handle."""
+    lParam1 = win32api.MAKELONG(x1, y1)
+    lParam2 = win32api.MAKELONG(x2, y2)
+    win32api.SendMessage(hwnd, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, lParam1)
+    time.sleep(0.2)
+    # Move gradually
+    steps = 20
+    for i in range(steps + 1):
+        ix = int(x1 + (x2 - x1) * i / steps)
+        iy = int(y1 + (y2 - y1) * i / steps)
+        lParamI = win32api.MAKELONG(ix, iy)
+        win32api.SendMessage(hwnd, win32con.WM_MOUSEMOVE, win32con.MK_LBUTTON, lParamI)
+        time.sleep(0.02)
+    win32api.SendMessage(hwnd, win32con.WM_LBUTTONUP, 0, lParam2)
+    time.sleep(0.1)
+
+def find_zen_hwnd():
+    """Find Zen Studio window handle."""
+    result = []
+    def callback(hwnd, _):
+        title = win32gui.GetWindowText(hwnd)
+        if "zen" in title.lower() and win32gui.IsWindowVisible(hwnd):
+            rect = win32gui.GetWindowRect(hwnd)
+            w = rect[2] - rect[0]
+            if w > 200:
+                result.append(hwnd)
+    win32gui.EnumWindows(callback, None)
+    return result[0] if result else None
+
 # ── Automate Zen Studio ───────────────────────────────────────────────────────
 def automate_zen_studio(zen_path, gpc_path):
     proc = subprocess.Popen([zen_path, gpc_path])
 
-    # Wait for ANY window containing "zen" in title
-    zen_window = None
+    # Wait for Zen Studio window
+    hwnd = None
     for _ in range(30):
         time.sleep(1)
-        for win in gw.getAllWindows():
-            if "zen" in win.title.lower() and win.width > 200:
-                zen_window = win
-                break
-        if zen_window:
+        hwnd = find_zen_hwnd()
+        if hwnd:
             break
 
-    if not zen_window:
+    if not hwnd:
         proc.kill()
         raise Exception("Zen Studio did not open. Please install Zen Studio first.")
 
-    # Wait for full load
-    time.sleep(4)
+    # Immediately move off screen before it finishes loading
+    # Use a large fixed size so coords are consistent
+    HIDDEN_X = -3000
+    WIN_W = 1920
+    WIN_H = 1080
 
-    # Bring to front and maximize to get consistent coords
-    try:
-        zen_window.activate()
-        time.sleep(0.5)
-        zen_window.maximize()
-        time.sleep(1)
-    except:
-        pass
+    # Move off screen right away — before user can see anything
+    win32gui.SetWindowPos(hwnd, win32con.HWND_BOTTOM,
+                          HIDDEN_X, 0, WIN_W, WIN_H,
+                          win32con.SWP_NOACTIVATE)
+    time.sleep(0.3)
 
-    # Re-get window after maximize
-    for win in gw.getAllWindows():
-        if "zen" in win.title.lower() and win.width > 200:
-            zen_window = win
-            break
+    # Maximize off screen for consistent coords
+    win32gui.ShowWindow(hwnd, win32con.SW_SHOWMAXIMIZED)
+    time.sleep(0.5)
 
-    wx = zen_window.left
-    wy = zen_window.top
-    ww = zen_window.width
-    wh = zen_window.height
+    # Move off screen again after maximize (maximize may reposition it)
+    win32gui.SetWindowPos(hwnd, win32con.HWND_BOTTOM,
+                          HIDDEN_X, 0, WIN_W, WIN_H,
+                          win32con.SWP_NOACTIVATE)
 
+    # Wait for full load while hidden
+    time.sleep(3)
+
+    # Use fixed coords based on WIN_W x WIN_H
+    ww = WIN_W
+    wh = WIN_H
+
+    # All clicks sent directly to window handle — mouse never moves
     # Click Programmer tab
-    pyautogui.click(wx + int(ww * 0.50), wy + int(wh * 0.095))
+    hwnd_click(hwnd, int(ww * 0.50), int(wh * 0.095))
     time.sleep(1.5)
 
     # Click 3 lines button
-    pyautogui.click(wx + int(ww * 0.038), wy + int(wh * 0.355))
+    hwnd_click(hwnd, int(ww * 0.038), int(wh * 0.355))
     time.sleep(1.5)
 
     # Click first file in list
-    file_x = wx + int(ww * 0.75)
-    file_y = wy + int(wh * 0.19)
-    pyautogui.click(file_x, file_y)
+    file_x = int(ww * 0.75)
+    file_y = int(wh * 0.19)
+    hwnd_click(hwnd, file_x, file_y)
     time.sleep(0.5)
 
     # Drag to slot 2
-    slot2_x = wx + int(ww * 0.72)
-    slot2_y = wy + int(wh * 0.67)
-    pyautogui.moveTo(file_x, file_y, duration=0.3)
-    pyautogui.mouseDown()
-    time.sleep(0.3)
-    pyautogui.moveTo(slot2_x, slot2_y, duration=0.6)
-    time.sleep(0.3)
-    pyautogui.mouseUp()
+    slot2_x = int(ww * 0.72)
+    slot2_y = int(wh * 0.67)
+    hwnd_drag(hwnd, file_x, file_y, slot2_x, slot2_y)
     time.sleep(1.5)
 
     # Click Play button
-    pyautogui.click(wx + int(ww * 0.038), wy + int(wh * 0.520))
+    hwnd_click(hwnd, int(ww * 0.038), int(wh * 0.520))
     time.sleep(1)
 
-    # Wait for success popup
-    for _ in range(40):
+    # Wait for success popup — check for child windows
+    for _ in range(20):
         time.sleep(0.5)
-        for win in gw.getAllWindows():
-            title = win.title.lower()
-            if any(word in title for word in ["success", "complete", "programm", "written", "ok"]):
-                try:
-                    win.close()
-                except:
-                    pass
-                break
-        pyautogui.press('enter')
+        # Check for any popup dialog
+        def check_popup(hwnd_check, _):
+            title = win32gui.GetWindowText(hwnd_check).lower()
+            if any(word in title for word in ["success", "complete", "programm", "written"]):
+                win32gui.PostMessage(hwnd_check, win32con.WM_CLOSE, 0, 0)
+        try:
+            win32gui.EnumWindows(check_popup, None)
+        except:
+            pass
+        # Also send Enter key to dismiss any popup
+        win32api.SendMessage(hwnd, win32con.WM_KEYDOWN, win32con.VK_RETURN, 0)
+        win32api.SendMessage(hwnd, win32con.WM_KEYUP, win32con.VK_RETURN, 0)
 
     # Force close Zen Studio
+    try:
+        win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
+    except:
+        pass
+    time.sleep(0.5)
     try:
         proc.terminate()
     except:
         pass
-    time.sleep(0.5)
+    time.sleep(0.3)
     try:
         proc.kill()
     except:
@@ -272,11 +323,9 @@ class AnimatedBackground(tk.Canvas):
             alpha = random.uniform(0.05, 0.18)
             dx = math.cos(math.radians(angle)) * speed
             dy = math.sin(math.radians(angle)) * speed
-            r = int(124 * alpha * 3)
-            g = int(58 * alpha * 3)
-            b = int(237 * alpha * 3)
-            r = min(r, 255); g = min(g, 255); b = min(b, 255)
-            color = f"#{r:02x}{g:02x}{b:02x}"
+            v = int(255 * alpha * 2.5)
+            v = min(v, 255)
+            color = f"#{v:02x}{v:02x}{v:02x}"
             lid = self.create_line(x1, y1, x1+length, y1+length,
                                    fill=color, width=1)
             self.lines.append({'id': lid, 'x': x1, 'y': y1,
@@ -351,12 +400,12 @@ class StepRow(tk.Frame):
         c.delete("all")
         if self._done:
             c.create_oval(2, 2, 34, 34, fill=ACCENT, outline="")
-            c.create_text(18, 18, text="✓", fill="white", font=("Segoe UI", 12, "bold"))
+            c.create_text(18, 18, text="✓", fill=BG, font=("Segoe UI", 12, "bold"))
         elif self._active:
             c.create_oval(2, 2, 34, 34, fill=ACCENT, outline=ACCENT2, width=2)
-            c.create_text(18, 18, text=str(self.number), fill="white", font=("Segoe UI", 10, "bold"))
+            c.create_text(18, 18, text=str(self.number), fill=BG, font=("Segoe UI", 10, "bold"))
         else:
-            c.create_oval(2, 2, 34, 34, fill="#1a1a2e", outline=BORDER, width=1)
+            c.create_oval(2, 2, 34, 34, fill="#141414", outline=BORDER, width=1)
             c.create_text(18, 18, text=str(self.number), fill=MUTED, font=("Segoe UI", 10))
 
     def set_active(self, subtitle=None):
@@ -383,7 +432,7 @@ class StepRow(tk.Frame):
             self.sub_lbl.configure(text=msg)
         self.num_canvas.delete("all")
         c = self.num_canvas
-        c.create_oval(2, 2, 34, 34, fill="#3a0a0a", outline=ERROR, width=1)
+        c.create_oval(2, 2, 34, 34, fill="#1a0a0a", outline=ERROR, width=1)
         c.create_text(18, 18, text="✕", fill=ERROR, font=("Segoe UI", 12, "bold"))
 
 # ── Main App ──────────────────────────────────────────────────────────────────
@@ -442,7 +491,10 @@ class RainyInstaller(tk.Tk):
             self.destroy()
 
     def _build_ui(self):
-        W, H = 680, 580
+        W, H = 620, 560
+
+        # Update window size
+        self.geometry(f"{W}x{H}")
 
         # Animated background
         self.bg = AnimatedBackground(self, W, H)
@@ -456,104 +508,115 @@ class RainyInstaller(tk.Tk):
         header = tk.Frame(content, bg=BG)
         header.pack(pady=(28, 0))
 
-        tk.Label(header, text="RAINY.SOLUTIONS", bg=BG, fg=ACCENT2,
-                 font=("Segoe UI", 16, "bold")).pack(pady=(6, 0))
-        tk.Label(header, text="I N S T A L L E R", bg=BG, fg=MUTED,
-                 font=("Segoe UI", 8, "bold")).pack()
-        tk.Label(header, text="Enhance your experience. Install. Inject. Dominate.",
-                 bg=BG, fg=MUTED, font=("Segoe UI", 8)).pack(pady=(2, 0))
+        tk.Label(header, text="RAINY.SOLUTIONS",
+                 bg=BG, fg=ACCENT,
+                 font=("Segoe UI", 18, "bold")).pack()
+        tk.Label(header, text="S C R I P T   I N S T A L L E R",
+                 bg=BG, fg=MUTED,
+                 font=("Segoe UI", 7)).pack(pady=(3, 0))
+
+        # ── Thin divider ──
+        tk.Frame(content, bg=BORDER, height=1).pack(fill="x", padx=40, pady=(14, 0))
 
         # ── Main card ──
         card = tk.Frame(content, bg=SURFACE,
                         highlightthickness=1, highlightbackground=BORDER)
-        card.pack(padx=40, pady=18, fill="x")
+        card.pack(padx=40, pady=16, fill="x")
 
-        # Key input
-        key_frame = tk.Frame(card, bg=SURFACE)
-        key_frame.pack(fill="x", padx=24, pady=(18, 0))
-        tk.Label(key_frame, text="LICENSE KEY", bg=SURFACE, fg=MUTED,
-                 font=("Segoe UI", 7, "bold")).pack(anchor="w")
-        entry_wrap = tk.Frame(key_frame, bg=ACCENT, padx=1, pady=1)
-        entry_wrap.pack(fill="x", pady=(4, 0))
+        # Key + script row
+        top_row = tk.Frame(card, bg=SURFACE)
+        top_row.pack(fill="x", padx=20, pady=(16, 0))
+
+        # Key input - left
+        key_col = tk.Frame(top_row, bg=SURFACE)
+        key_col.pack(side="left", fill="x", expand=True, padx=(0, 8))
+        tk.Label(key_col, text="LICENSE KEY", bg=SURFACE, fg=MUTED,
+                 font=("Segoe UI", 7)).pack(anchor="w")
         self.key_var = tk.StringVar()
-        self.key_entry = tk.Entry(entry_wrap, textvariable=self.key_var,
-                                   bg="#0d0d1a", fg=ACCENT2,
-                                   insertbackground=ACCENT2,
-                                   relief="flat", font=("Courier New", 12), bd=0)
-        self.key_entry.pack(fill="x", ipady=8, padx=1, pady=1)
+        self.key_entry = tk.Entry(key_col, textvariable=self.key_var,
+                                   bg="#0d0d0d", fg=ACCENT,
+                                   insertbackground=ACCENT,
+                                   relief="flat", font=("Courier New", 11),
+                                   bd=0, highlightthickness=1,
+                                   highlightbackground=BORDER2,
+                                   highlightcolor=ACCENT)
+        self.key_entry.pack(fill="x", ipady=7, pady=(4, 0))
 
-        # Script selector
-        script_frame = tk.Frame(card, bg=SURFACE)
-        script_frame.pack(fill="x", padx=24, pady=(12, 0))
-        tk.Label(script_frame, text="SCRIPT", bg=SURFACE, fg=MUTED,
-                 font=("Segoe UI", 7, "bold")).pack(anchor="w")
+        # Script - right
+        script_col = tk.Frame(top_row, bg=SURFACE)
+        script_col.pack(side="right", padx=(8, 0))
+        tk.Label(script_col, text="SCRIPT", bg=SURFACE, fg=MUTED,
+                 font=("Segoe UI", 7)).pack(anchor="w")
         style = ttk.Style()
         style.theme_use('clam')
-        style.configure("P.TCombobox",
-                         fieldbackground="#0d0d1a", background="#0d0d1a",
-                         foreground=ACCENT2, selectbackground=ACCENT,
-                         selectforeground="white", bordercolor=ACCENT,
-                         arrowcolor=ACCENT2)
+        style.configure("BW.TCombobox",
+                         fieldbackground="#0d0d0d",
+                         background="#0d0d0d",
+                         foreground=ACCENT,
+                         selectbackground="#222222",
+                         selectforeground=ACCENT,
+                         bordercolor=BORDER2,
+                         arrowcolor=MUTED2)
         self.script_var = tk.StringVar()
-        self.script_combo = ttk.Combobox(script_frame, textvariable=self.script_var,
-                                          state="readonly", font=("Segoe UI", 10),
-                                          style="P.TCombobox")
-        self.script_combo.pack(fill="x", pady=(4, 0))
+        self.script_combo = ttk.Combobox(script_col, textvariable=self.script_var,
+                                          state="readonly", font=("Segoe UI", 9),
+                                          style="BW.TCombobox", width=16)
+        self.script_combo.pack(pady=(4, 0), ipady=5)
         self._load_scripts()
 
         # Divider
-        tk.Frame(card, bg=BORDER, height=1).pack(fill="x", padx=24, pady=16)
+        tk.Frame(card, bg=BORDER, height=1).pack(fill="x", padx=20, pady=14)
 
         # Steps
         steps_frame = tk.Frame(card, bg=SURFACE)
-        steps_frame.pack(fill="x", padx=24, pady=(0, 4))
+        steps_frame.pack(fill="x", padx=20, pady=(0, 4))
 
         self.step1 = StepRow(steps_frame, 1, "Preparing", "Checking system compatibility...")
-        self.step1.pack(fill="x", pady=4)
-        tk.Frame(steps_frame, bg=BORDER, width=2, height=16).pack(anchor="w", padx=17)
+        self.step1.pack(fill="x", pady=3)
+        tk.Frame(steps_frame, bg=BORDER2, width=1, height=12).pack(anchor="w", padx=17)
 
         self.step2 = StepRow(steps_frame, 2, "Validating", "Validating your license key...")
-        self.step2.pack(fill="x", pady=4)
-        tk.Frame(steps_frame, bg=BORDER, width=2, height=16).pack(anchor="w", padx=17)
+        self.step2.pack(fill="x", pady=3)
+        tk.Frame(steps_frame, bg=BORDER2, width=1, height=12).pack(anchor="w", padx=17)
 
         self.step3 = StepRow(steps_frame, 3, "Installing", "Programming your Cronus Zen...")
-        self.step3.pack(fill="x", pady=4)
-        tk.Frame(steps_frame, bg=BORDER, width=2, height=16).pack(anchor="w", padx=17)
+        self.step3.pack(fill="x", pady=3)
+        tk.Frame(steps_frame, bg=BORDER2, width=1, height=12).pack(anchor="w", padx=17)
 
         self.step4 = StepRow(steps_frame, 4, "Finalizing", "Cleaning up and finishing...")
-        self.step4.pack(fill="x", pady=(4, 18))
+        self.step4.pack(fill="x", pady=(3, 16))
 
         # ── Install button ──
-        self.install_btn = tk.Button(content, text="⚡   Install to Zen",
-                                      bg=ACCENT, fg="white",
+        self.install_btn = tk.Button(content, text="Install to Zen",
+                                      bg=ACCENT, fg=BG,
                                       activebackground=ACCENT2,
-                                      activeforeground="white",
-                                      relief="flat", font=("Segoe UI", 11, "bold"),
+                                      activeforeground=BG,
+                                      relief="flat", font=("Segoe UI", 10, "bold"),
                                       cursor="hand2", command=self._start_install, bd=0)
         self.install_btn.pack(padx=40, fill="x", ipady=12)
         self.install_btn.bind("<Enter>", lambda e: self.install_btn.configure(bg=ACCENT2))
         self.install_btn.bind("<Leave>", lambda e: self.install_btn.configure(bg=ACCENT))
 
-        # ── Footer badge ──
-        badge = tk.Frame(content, bg=BG)
-        badge.pack(pady=(10, 0))
-        tk.Label(badge, text="🛡  Safe  •  Secure  •  Undetected",
-                 bg=BG, fg=ACCENT2, font=("Segoe UI", 8, "bold")).pack()
-        tk.Label(badge, text="Your system is protected.",
-                 bg=BG, fg=MUTED, font=("Segoe UI", 7)).pack()
-
         # ── Bottom status bar ──
-        bottom = tk.Frame(content, bg="#080810")
+        bottom = tk.Frame(content, bg="#050505")
         bottom.pack(side="bottom", fill="x")
 
-        self.status_var = tk.StringVar(value="Ready to install")
-        self.status_lbl = tk.Label(bottom, textvariable=self.status_var,
-                                    bg="#080810", fg=MUTED,
-                                    font=("Segoe UI", 8), anchor="w")
-        self.status_lbl.pack(side="left", padx=12, pady=6)
-
+        # Shimmer line at very bottom
         self.shimmer = ShimmerBar(bottom)
         self.shimmer.pack(side="bottom", fill="x")
+
+        status_row = tk.Frame(bottom, bg="#050505")
+        status_row.pack(fill="x", padx=16, pady=(6, 6))
+
+        self.status_var = tk.StringVar(value="Ready to install")
+        self.status_lbl = tk.Label(status_row, textvariable=self.status_var,
+                                    bg="#050505", fg=MUTED,
+                                    font=("Segoe UI", 8), anchor="w")
+        self.status_lbl.pack(side="left")
+
+        tk.Label(status_row, text="rainy.solutions",
+                 bg="#050505", fg=BORDER2,
+                 font=("Segoe UI", 7)).pack(side="right")
 
     def _load_scripts(self):
         try:
