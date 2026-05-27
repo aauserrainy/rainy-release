@@ -91,7 +91,7 @@ class RainyInstaller(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title(APP_NAME)
-        self.geometry("480x340")
+        self.geometry("520x420")
         self.resizable(False, False)
         self.configure(bg="#050a0f")
         self.iconbitmap(default='') if sys.platform == 'win32' else None
