@@ -11,7 +11,7 @@ import winreg
 import glob
 
 # ── Config ────────────────────────────────────────────────────────────────────
-API_BASE = "rainy-backend1-production.up.railway.app"  # Replace with your Railway URL
+API_BASE = "https://rainy-backend1-production.up.railway.app"
 APP_NAME = "Rainy.solutions Installer"
 MASTER_KEY = "29d201e746983999afad5e6783f6b4a6"  # Must match server
 
