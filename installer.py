@@ -18,7 +18,6 @@ from cryptography.hazmat.backends import default_backend
 import pyautogui
 import pygetwindow as gw
 import win32gui
-import win32api
 import win32con
 
 pyautogui.FAILSAFE = False
@@ -68,24 +67,6 @@ def get_hwid():
     except:
         return hashlib.sha256(str(uuid.getnode()).encode()).hexdigest()
 
-# ── Input lock ────────────────────────────────────────────────────────────────
-_input_locked = False
-
-def lock_input():
-    global _input_locked
-    try:
-        ctypes.windll.user32.BlockInput(True)
-        _input_locked = True
-    except:
-        pass
-
-def unlock_input():
-    global _input_locked
-    try:
-        ctypes.windll.user32.BlockInput(False)
-        _input_locked = False
-    except:
-        pass
 
 # ── Decryption ────────────────────────────────────────────────────────────────
 def decrypt_script(encrypted_bytes, license_key):
@@ -298,7 +279,6 @@ def automate_zen_studio(zen_path, gpc_path):
             pyautogui.press("enter")
 
     except Exception as e:
-        unlock_input()
         raise e
 
     # Force close Zen Studio
