@@ -154,15 +154,12 @@ class RainyInstaller(tk.Tk):
         self.progress.pack(pady=(8, 0), padx=40)
 
     def _format_key(self, *args):
-        val = self.key_var.get().replace("-", "").upper()
-        val = val[:16]
-        parts = [val[i:i+4] for i in range(0, len(val), 4)]
-        formatted = "-".join(parts)
-        # Prevent recursive trace
-        self.key_var.trace_vdelete("w", self._trace_id) if hasattr(self, '_trace_id') else None
-        self.key_entry.delete(0, tk.END)
-        self.key_entry.insert(0, formatted)
-        self._trace_id = self.key_var.trace("w", self._format_key)
+    # Don't reformat — just uppercase
+    val = self.key_var.get().upper()
+    self.key_var.trace_vdelete("w", self._trace_id) if hasattr(self, '_trace_id') else None
+    self.key_entry.delete(0, tk.END)
+    self.key_entry.insert(0, val)
+    self._trace_id = self.key_var.trace("w", self._format_key)
 
     def _load_scripts(self):
         try:
@@ -183,7 +180,7 @@ class RainyInstaller(tk.Tk):
         key = self.key_var.get().strip().upper()
         script = self.script_var.get()
 
-        if len(key.replace("-", "")) < 13:
+        if len(key.replace("-", "")) < 10:
             self._set_status("Please enter your full license key.", "#ff5566")
             return
 
