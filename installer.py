@@ -177,6 +177,8 @@ def find_zen_studio():
         except:
             pass
     return None
+
+
 def find_zen_hwnd():
     """Find Zen Studio window handle."""
     result = []
@@ -189,6 +191,7 @@ def find_zen_hwnd():
                 result.append(hwnd)
     win32gui.EnumWindows(callback, None)
     return result[0] if result else None
+
 
 # ── Automate Zen Studio ───────────────────────────────────────────────────────
 def automate_zen_studio(zen_path, gpc_path):
@@ -212,7 +215,7 @@ def automate_zen_studio(zen_path, gpc_path):
     # Wait for full load
     time.sleep(4)
 
-    # Force maximize using win32 directly — more reliable than pygetwindow
+    # Force maximize using win32 directly
     try:
         hwnd = win32gui.FindWindow(None, zen_window.title)
         win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
@@ -241,17 +244,21 @@ def automate_zen_studio(zen_path, gpc_path):
     ww = zen_window.width
     wh = zen_window.height
 
+    # ── Helpers defined INSIDE the function with correct indentation ──
     def locked_click(x, y):
+        pyautogui.moveTo(x, y, duration=0.15)
+        time.sleep(0.1)
         pyautogui.click(x, y)
-    
-def locked_drag(x1, y1, x2, y2):
-    pyautogui.moveTo(x1, y1, duration=0.2)
-    pyautogui.mouseDown()
-    time.sleep(0.2)
-    pyautogui.moveTo(x2, y2, duration=0.5)
-    time.sleep(0.2)
-    pyautogui.mouseUp()
-    
+        time.sleep(0.1)
+
+    def locked_drag(x1, y1, x2, y2):
+        pyautogui.moveTo(x1, y1, duration=0.2)
+        pyautogui.mouseDown()
+        time.sleep(0.2)
+        pyautogui.moveTo(x2, y2, duration=0.5)
+        time.sleep(0.2)
+        pyautogui.mouseUp()
+
     try:
         # Click Programmer tab
         locked_click(wx + int(ww * 0.50), wy + int(wh * 0.095))
@@ -294,7 +301,7 @@ def locked_drag(x1, y1, x2, y2):
         unlock_input()
         raise e
 
-    # Force close Zen Studio INSTANTLY
+    # Force close Zen Studio
     try:
         hwnd = win32gui.FindWindow(None, zen_window.title)
         win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
@@ -309,6 +316,7 @@ def locked_drag(x1, y1, x2, y2):
         proc.kill()
     except:
         pass
+
 
 # ── Animated Background ───────────────────────────────────────────────────────
 class AnimatedBackground(tk.Canvas):
@@ -336,7 +344,7 @@ class AnimatedBackground(tk.Canvas):
             v = int(255 * alpha * 2.5)
             v = min(v, 255)
             color = f"#{v:02x}{v:02x}{v:02x}"
-            lid = self.create_line(x1, y1, x1+length, y1+length,
+            lid = self.create_line(x1, y1, x1 + length, y1 + length,
                                    fill=color, width=1)
             self.lines.append({'id': lid, 'x': x1, 'y': y1,
                                 'dx': dx, 'dy': dy, 'length': length,
@@ -354,6 +362,7 @@ class AnimatedBackground(tk.Canvas):
             ey = l['y'] + math.sin(math.radians(l['angle'])) * l['length']
             self.coords(l['id'], l['x'], l['y'], ex, ey)
         self.after(16, self._animate)
+
 
 # ── Shimmer Progress Bar ──────────────────────────────────────────────────────
 class ShimmerBar(tk.Frame):
@@ -376,6 +385,7 @@ class ShimmerBar(tk.Frame):
         self._bright = not self._bright
         self.configure(bg="white" if self._bright else "#0d0d1a")
         self.after(60, self._loop)
+
 
 # ── Step Widget ───────────────────────────────────────────────────────────────
 class StepRow(tk.Frame):
@@ -445,6 +455,7 @@ class StepRow(tk.Frame):
         c.create_oval(2, 2, 34, 34, fill="#1a0a0a", outline=ERROR, width=1)
         c.create_text(18, 18, text="✕", fill=ERROR, font=("Segoe UI", 12, "bold"))
 
+
 # ── Main App ──────────────────────────────────────────────────────────────────
 class RainyInstaller(tk.Tk):
     def __init__(self):
@@ -463,13 +474,11 @@ class RainyInstaller(tk.Tk):
         self.after(500, self._check_banned)
 
     def _block_clipboard(self):
-        """Block copy/paste on the installer window."""
-        # Disable all clipboard shortcuts
         self.bind_all('<Control-c>', lambda e: 'break')
         self.bind_all('<Control-v>', lambda e: 'break')
         self.bind_all('<Control-x>', lambda e: 'break')
         self.bind_all('<Control-a>', lambda e: 'break')
-        self.bind_all('<Button-3>', lambda e: 'break')  # Right click
+        self.bind_all('<Button-3>', lambda e: 'break')
         self.bind_all('<Control-Insert>', lambda e: 'break')
         self.bind_all('<Shift-Insert>', lambda e: 'break')
 
@@ -502,8 +511,6 @@ class RainyInstaller(tk.Tk):
 
     def _build_ui(self):
         W, H = 920, 760
-
-        # Update window size
         self.geometry(f"{W}x{H}")
 
         # Animated background
@@ -611,7 +618,6 @@ class RainyInstaller(tk.Tk):
         bottom = tk.Frame(content, bg="#050505")
         bottom.pack(side="bottom", fill="x")
 
-        # Shimmer line at very bottom
         self.shimmer = ShimmerBar(bottom)
         self.shimmer.pack(side="bottom", fill="x")
 
