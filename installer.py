@@ -456,7 +456,7 @@ class RainyInstaller(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title(APP_NAME)
-        self.geometry("720x720")
+        self.geometry("920x760")
         self.resizable(False, False)
         self.configure(bg=BG)
         self.attributes('-alpha', 0.0)
@@ -507,7 +507,7 @@ class RainyInstaller(tk.Tk):
             self.destroy()
 
     def _build_ui(self):
-        W, H = 620, 560
+        W, H = 920, 760
 
         # Update window size
         self.geometry(f"{W}x{H}")
