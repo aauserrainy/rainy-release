@@ -183,7 +183,7 @@ class RainyInstaller(tk.Tk):
         key = self.key_var.get().strip().upper()
         script = self.script_var.get()
 
-        if len(key.replace("-", "")) < 16:
+        if len(key.replace("-", "")) < 13:
             self._set_status("Please enter your full license key.", "#ff5566")
             return
 
