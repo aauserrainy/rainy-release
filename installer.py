@@ -153,7 +153,7 @@ class RainyInstaller(tk.Tk):
         self.progress = ttk.Progressbar(self, mode="indeterminate", length=400)
         self.progress.pack(pady=(8, 0), padx=40)
 
-    def _format_key(self, *args):
+  def _format_key(self, *args):
     # Don't reformat — just uppercase
     val = self.key_var.get().upper()
     self.key_var.trace_vdelete("w", self._trace_id) if hasattr(self, '_trace_id') else None
