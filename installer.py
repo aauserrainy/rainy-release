@@ -242,19 +242,15 @@ def automate_zen_studio(zen_path, gpc_path):
     wh = zen_window.height
 
     def locked_click(x, y):
-        block_keyboard()
-        pyautogui.click(x, y)
-        unblock_keyboard()
+    pyautogui.click(x, y)
 
     def locked_drag(x1, y1, x2, y2):
-        block_keyboard()
-        pyautogui.moveTo(x1, y1, duration=0.2)
-        pyautogui.mouseDown()
-        time.sleep(0.2)
-        pyautogui.moveTo(x2, y2, duration=0.5)
-        time.sleep(0.2)
-        pyautogui.mouseUp()
-        unblock_keyboard()
+    pyautogui.moveTo(x1, y1, duration=0.2)
+    pyautogui.mouseDown()
+    time.sleep(0.2)
+    pyautogui.moveTo(x2, y2, duration=0.5)
+    time.sleep(0.2)
+    pyautogui.mouseUp()
 
     try:
         # Click Programmer tab
@@ -292,12 +288,10 @@ def automate_zen_studio(zen_path, gpc_path):
                     except:
                         pass
                     break
-            block_keyboard()
             pyautogui.press("enter")
-            unblock_keyboard()
 
     except Exception as e:
-        unblock_keyboard()
+        unlock_input()
         raise e
 
     # Force close Zen Studio INSTANTLY
