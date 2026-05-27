@@ -9,8 +9,11 @@ import tempfile
 import threading
 import winreg
 import glob
+import time
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
+import pyautogui
+import pygetwindow as gw
 
 # ── Config ────────────────────────────────────────────────────────────────────
 API_BASE = "https://rainy-backend1-production.up.railway.app"
@@ -65,6 +68,54 @@ def find_zen_studio():
             return results[0]
     return None
 
+# ── Automate Zen Studio ───────────────────────────────────────────────────────
+def automate_zen_studio(zen_path, gpc_path):
+    """Open Zen Studio, compile and program, then close it."""
+    # Open Zen Studio with the gpc file
+    proc = subprocess.Popen([zen_path, gpc_path])
+
+    # Wait for Zen Studio window to appear
+    zen_window = None
+    for _ in range(30):
+        time.sleep(1)
+        windows = gw.getWindowsWithTitle("Zen Studio")
+        if windows:
+            zen_window = windows[0]
+            break
+
+    if not zen_window:
+        proc.kill()
+        raise Exception("Zen Studio did not open in time.")
+
+    # Wait a bit more for it to fully load
+    time.sleep(3)
+
+    # Bring window to front
+    try:
+        zen_window.activate()
+    except:
+        pass
+
+    time.sleep(1)
+
+    # Press F5 to Compile & Program (standard Zen Studio shortcut)
+    pyautogui.hotkey('F5')
+    time.sleep(8)
+
+    # Close Zen Studio
+    try:
+        zen_window.close()
+    except:
+        pass
+
+    time.sleep(1)
+
+    # Force close if still open
+    try:
+        proc.terminate()
+    except:
+        pass
+
 # ── Main App ──────────────────────────────────────────────────────────────────
 class RainyInstaller(tk.Tk):
     def __init__(self):
@@ -78,7 +129,8 @@ class RainyInstaller(tk.Tk):
     def _build_ui(self):
         tk.Label(self, text="Rainy.solutions", bg="#050a0f", fg="#4ab8ff",
                  font=("Segoe UI", 22, "bold")).pack(pady=(28, 2))
-        tk.Label(self, text="Script Installer — Close Zen Studio before installing", bg="#050a0f", fg="#4a7a9b",
+        tk.Label(self, text="Script Installer — Close Zen Studio before installing",
+                 bg="#050a0f", fg="#4a7a9b",
                  font=("Segoe UI", 9)).pack()
 
         frame = tk.Frame(self, bg="#050a0f")
@@ -182,28 +234,24 @@ class RainyInstaller(tk.Tk):
             encrypted_bytes = response.content
             decrypted = decrypt_script(encrypted_bytes, key)
 
-            self._set_status("Programming your Cronus Zen...", "#4a7a9b")
+            # Write temp file
             tmp_fd, tmp_path = tempfile.mkstemp(suffix=".gpc")
             with os.fdopen(tmp_fd, 'wb') as f:
                 f.write(decrypted)
 
-            result = subprocess.run(
-                [zen_path, "--compile", tmp_path, "--program"],
-                capture_output=True,
-                timeout=30
-            )
+            self._set_status("Programming your Cronus Zen — please wait...", "#4a7a9b")
 
+            # Automate Zen Studio
+            automate_zen_studio(zen_path, tmp_path)
+
+            # Delete temp file
             try:
                 os.remove(tmp_path)
                 tmp_path = None
             except:
                 pass
 
-            if result.returncode == 0:
-                self._set_status("✓ Script installed! Your Cronus Zen is ready.", "#44ffaa")
-            else:
-                subprocess.Popen([zen_path, tmp_path])
-                self._set_status("✓ Zen Studio opened — click Compile & Program to finish.", "#44ffaa")
+            self._set_status("✓ Script installed! Your Cronus Zen is ready.", "#44ffaa")
 
         except requests.exceptions.ConnectionError:
             self._set_status("Cannot connect to server. Check your internet.", "#ff5566")
