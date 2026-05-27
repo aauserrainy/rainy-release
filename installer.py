@@ -298,46 +298,25 @@ class AnimatedBackground(tk.Canvas):
 
 # ── Shimmer Progress Bar ──────────────────────────────────────────────────────
 class ShimmerBar(tk.Frame):
-    def __init__(self, parent, w, h, **kwargs):
-        super().__init__(parent, width=w, height=h, bg="#0d0d1a",
-                         highlightthickness=1, highlightbackground=BORDER, **kwargs)
-        self._w = w
-        self._h = h
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent, height=4, bg="#0d0d1a", **kwargs)
         self._running = False
-        self._x = -150
-        self._canvas = None
-        self._shimmer = None
-        self.pack_propagate(False)
-        self.after(200, self._setup_canvas)
-
-    def _setup_canvas(self):
-        self._canvas = tk.Canvas(self, width=self._w, height=self._h,
-                                  bg="#0d0d1a", highlightthickness=0)
-        self._canvas.pack(fill="both", expand=True)
-        self._shimmer = self._canvas.create_rectangle(0, 0, 0, 0,
-                                                       fill="white", outline="")
+        self._bright = False
 
     def start(self):
         self._running = True
-        self._x = -150
         self._loop()
 
     def stop(self):
         self._running = False
-        if self._shimmer and self._canvas:
-            self._canvas.coords(self._shimmer, 0, 0, 0, 0)
+        self.configure(bg="#0d0d1a")
 
     def _loop(self):
         if not self._running:
             return
-        if self._canvas and self._shimmer:
-            self._x += 5
-            if self._x > self._w + 150:
-                self._x = -150
-            self._canvas.coords(self._shimmer,
-                                self._x - 80, 1,
-                                self._x + 80, self._h - 1)
-        self.after(16, self._loop)
+        self._bright = not self._bright
+        self.configure(bg="white" if self._bright else "#0d0d1a")
+        self.after(60, self._loop)
 
 # ── Step Widget ───────────────────────────────────────────────────────────────
 class StepRow(tk.Frame):
@@ -562,7 +541,7 @@ class RainyInstaller(tk.Tk):
                                     font=("Segoe UI", 8), anchor="w")
         self.status_lbl.pack(side="left", padx=12, pady=6)
 
-        self.shimmer = ShimmerBar(bottom, w=660, h=4)
+        self.shimmer = ShimmerBar(bottom)
         self.shimmer.pack(side="bottom", fill="x")
 
     def _load_scripts(self):
